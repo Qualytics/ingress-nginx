@@ -16,6 +16,15 @@ env:
   IMAGE: docker.io/qualyticsai/ingress-nginx-controller
 
 jobs:
+  unit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Run the upstream Go unit suite
+        run: make ARCH=amd64 test
+
   qualify:
     name: Qualify ${{ matrix.variant }} linux/${{ matrix.arch }}
     strategy:
@@ -74,8 +83,9 @@ jobs:
         run: |
           export VERSION="$(cat TAG)"
           docker buildx bake "$VARIANT" --set "*.platform=linux/$ARCH" \
-            --set "$VARIANT.output=type=oci,dest=$RUNNER_TEMP/$VARIANT-$ARCH.tar" \
+            --set "$VARIANT.output=type=oci,dest=$VARIANT-$ARCH.tar" \
             --sbom=true --provenance=mode=max
+          mv "$VARIANT-$ARCH.tar" "$RUNNER_TEMP/"
           skopeo --override-os linux --override-arch "$ARCH" copy \
             "oci-archive:$RUNNER_TEMP/$VARIANT-$ARCH.tar" "docker-daemon:qualytics-$VARIANT:qualification"
       - name: Scan the candidate image
@@ -107,7 +117,7 @@ jobs:
           retention-days: 3
 
   sign:
-    needs: qualify
+    needs: [unit, qualify]
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'Qualytics/ingress-nginx'
     runs-on: ubuntu-24.04
     permissions:

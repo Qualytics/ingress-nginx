@@ -46,10 +46,19 @@ trap 'exit 143' TERM
 
 # Exercise the released ingress templates and exact vendored dependency without Qualytics application images.
 chart="$work/qualytics"
-mkdir -p "$chart/templates"
-cp "$source_chart"/{Chart.yaml,Chart.lock,values.yaml} "$chart/"
-cp -R "$source_chart/charts" "$chart/"
+mkdir -p "$chart/templates" "$chart/charts"
+cp "$source_chart"/{Chart.yaml,values.yaml} "$chart/"
 cp "$source_chart"/templates/{_helpers.tpl,ingress.yaml} "$chart/templates/"
+version=$(yq -r '.dependencies[] | select(.name == "ingress-nginx").version' "$chart/Chart.yaml")
+archive="ingress-nginx-$version.tgz"
+if [[ -f "$source_chart/charts/$archive" ]]; then
+  cp "$source_chart/charts/$archive" "$chart/charts/"
+else
+  repo=$(yq -r '.dependencies[] | select(.name == "ingress-nginx").repository' "$chart/Chart.yaml")
+  helm_repo=(--repository-config "$work/repositories.yaml" --repository-cache "$work/repository")
+  helm repo add upstream "$repo" "${helm_repo[@]}"
+  helm pull upstream/ingress-nginx --version "$version" --destination "$chart/charts" "${helm_repo[@]}"
+fi
 
 kind create cluster --name "$cluster" --kubeconfig "$KUBECONFIG" --image "$node_image" --wait 3m
 ref=${candidate%@*}
