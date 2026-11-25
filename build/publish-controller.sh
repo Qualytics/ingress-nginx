@@ -43,3 +43,16 @@ for variant in controller controller-chroot; do
   [[ $(oras manifest fetch --descriptor "$repository:$version" | jq -er '.digest') == "$digest" ]]
   printf '%s\n' "$repository:$version@$digest"
 done
+
+# Publish verification material and SBOMs without distributing the private image layers.
+tag="controller-$version"
+metadata=("$signed"/*.index.json "$signed"/*.sigstore.json "$work"/*.attestation.json "$work"/*.spdx.intoto.json)
+if gh release view "$tag" --repo Qualytics/ingress-nginx >/dev/null 2>&1; then
+  mkdir "$work/published"
+  gh release download "$tag" --repo Qualytics/ingress-nginx --dir "$work/published" --pattern '*.json'
+  for file in "${metadata[@]}"; do cmp "$file" "$work/published/$(basename "$file")"; done
+else
+  gh release create "$tag" "${metadata[@]}" --repo Qualytics/ingress-nginx \
+    --target "$(git rev-parse HEAD)" --latest=false --title "Qualytics ingress-nginx $version" \
+    --notes "Signed multiarchitecture image indexes, Sigstore bundles and software bills of materials for the standard and chroot controllers. Images are available to authenticated Qualytics customers on Docker Hub."
+fi

@@ -4,7 +4,7 @@ Qualytics brings together community and open-source maintenance work to provide 
 
 Qualytics publishes the `ingress-nginx` Helm chart at `https://qualytics.github.io/ingress-nginx`. The Qualytics self-hosted chart includes it as the optional `nginx` dependency. Existing installations keep their `nginx.*` values. [Standalone chart](charts/ingress-nginx/README.md) · [Self-hosted image inventory](https://github.com/Qualytics/qualytics-self-hosted/blob/main/docs/docker-images.md)
 
-The chart pins the Linux amd64 and arm64 image index by digest. Docker Hub hosts the standard image at `qualyticsai/ingress-nginx-controller` and the chroot image at `qualyticsai/ingress-nginx-controller-chroot`. Each index includes an SBOM and build provenance for each architecture. The attached Sigstore bundle signs the exact index with the Qualytics GitHub Actions release identity. [Release workflow](.github/workflows/qualytics-controller.yml) · [Signature verification](build/publish-controller.sh)
+The chart pins the Linux amd64 and arm64 image index by digest. Use your Qualytics Docker Hub credentials to pull `qualyticsai/ingress-nginx-controller` or `qualyticsai/ingress-nginx-controller-chroot`. Each controller release publishes its signed indexes, Sigstore bundles and architecture-specific software bills of materials for independent verification. [Controller releases](https://github.com/Qualytics/ingress-nginx/releases) · [Signature verification](build/publish-controller.sh)
 
 ## Overview
 

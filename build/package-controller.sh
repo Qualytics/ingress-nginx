@@ -18,15 +18,17 @@ for variant in controller controller-chroot; do
       '[.manifests[] | select(.platform.os == "linux" and .platform.architecture == $arch)] | select(length == 1) | .[0].digest' "$manifest")
     attestation=$(jq -er --arg digest "$runnable" \
       '.manifests[] | select(.annotations["vnd.docker.reference.type"] == "attestation-manifest" and .annotations["vnd.docker.reference.digest"] == $digest) | .digest' "$manifest")
+    attest_manifest="$layout/blobs/sha256/${attestation#sha256:}"
     jq -e '
       [.layers[].annotations["in-toto.io/predicate-type"]] as $types |
       any($types[]; . == "https://spdx.dev/Document") and
       any($types[]; startswith("https://slsa.dev/provenance/"))
-    ' "$layout/blobs/sha256/${attestation#sha256:}" >/dev/null
-    sbom=$(jq -er '.layers[] | select(.annotations["in-toto.io/predicate-type"] == "https://spdx.dev/Document") | .digest' \
-      "$layout/blobs/sha256/${attestation#sha256:}")
-    jq -e '[.predicate.packages[] | select(.name == "libxml2") | .versionInfo] | unique == ["2.13.9-r4"]' \
-      "$layout/blobs/sha256/${sbom#sha256:}" >/dev/null
+    ' "$attest_manifest" >/dev/null
+    sbom=$(jq -er '.layers[] | select(.annotations["in-toto.io/predicate-type"] == "https://spdx.dev/Document") | .digest' "$attest_manifest")
+    sbom_blob="$layout/blobs/sha256/${sbom#sha256:}"
+    jq -e '[.predicate.packages[] | select(.name == "libxml2") | .versionInfo] | unique == ["2.13.9-r4"]' "$sbom_blob" >/dev/null
+    cp "$attest_manifest" "$output/$variant-$arch.attestation.json"
+    cp "$sbom_blob" "$output/$variant-$arch.spdx.intoto.json"
   done
   index="$output/$variant.index.json"
   jq -cs --arg revision "$revision" --arg version "$version" --arg image "docker.io/qualyticsai/ingress-nginx-$variant" '
