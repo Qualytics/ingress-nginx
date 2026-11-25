@@ -47,10 +47,21 @@ done
 # Publish verification material and SBOMs without distributing the private image layers.
 tag="controller-$version"
 metadata=("$signed"/*.index.json "$signed"/*.sigstore.json "$work"/*.attestation.json "$work"/*.spdx.intoto.json)
-if gh release view "$tag" --repo Qualytics/ingress-nginx >/dev/null 2>&1; then
+if published=$(gh release view "$tag" --repo Qualytics/ingress-nginx --json assets --jq '.assets[].name'); then
+  missing=()
   mkdir "$work/published"
-  gh release download "$tag" --repo Qualytics/ingress-nginx --dir "$work/published" --pattern '*.json'
-  for file in "${metadata[@]}"; do cmp "$file" "$work/published/$(basename "$file")"; done
+  for file in "${metadata[@]}"; do
+    name=$(basename "$file")
+    if grep -Fxq -- "$name" <<< "$published"; then
+      gh release download "$tag" --repo Qualytics/ingress-nginx --dir "$work/published" --pattern "$name"
+      cmp "$file" "$work/published/$name"
+    else
+      missing+=("$file")
+    fi
+  done
+  if (( ${#missing[@]} )); then
+    gh release upload "$tag" --repo Qualytics/ingress-nginx "${missing[@]}"
+  fi
 else
   gh release create "$tag" "${metadata[@]}" --repo Qualytics/ingress-nginx \
     --target "$(git rev-parse HEAD)" --latest=false --title "Qualytics ingress-nginx $version" \
