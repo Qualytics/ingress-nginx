@@ -102,7 +102,7 @@ for app in api frontend; do
 done
 
 check_release() {
-  local expected=$1 port= route body actual pod admitted=false
+  local expected=$1 port= route body actual pod admitted=false probe padding waf_logged=false
   k rollout status deployment/smoke-nginx-controller --timeout=3m
   actual=$(k get deployment smoke-nginx-controller -o jsonpath='{.spec.template.spec.containers[0].image}')
   [[ "$actual" == "$expected" ]] || { echo "Expected controller $expected, got $actual" >&2; return 1; }
@@ -144,9 +144,9 @@ check_release() {
     sleep 0.2
   done
   [[ -n "$port" ]] || { cat "$work/forward.log" >&2; return 1; }
+  local tls=(--noproxy '*' --cacert "$work/tls.crt" --resolve "$host:$port:127.0.0.1" --max-time 5)
   while read -r route body; do
-    actual=$(curl -fsS --retry 8 --retry-all-errors --retry-delay 1 --max-time 5 \
-      --noproxy '*' --cacert "$work/tls.crt" --resolve "$host:$port:127.0.0.1" \
+    actual=$(curl -fsS --retry 8 --retry-all-errors --retry-delay 1 "${tls[@]}" \
       -D "$work/headers" "https://$host:$port$route")
     [[ "$actual" == "$body" ]] || { echo "$route returned '$actual'" >&2; return 1; }
     grep -Eiq '^x-frame-options:[[:space:]]*SAMEORIGIN[[:space:]]*$' "$work/headers"
@@ -156,6 +156,20 @@ check_release() {
 /.well-known/metadata metadata
 /api/anomalies/7/source-record/download stream
 ROUTES
+  # Rule 14855 rejects URIs over 4 KiB. The marker distinguishes this request in the controller log.
+  probe="smoke-waf-$(uuidgen)"
+  padding=$(printf '%04096d' 0)
+  actual=$(curl -sS "${tls[@]}" -o /dev/null -w '%{http_code}' "https://$host:$port/api/$probe/$padding")
+  [[ "$actual" == 414 ]] || { echo "Expected the WAF URI length limit to return 414, got $actual" >&2; return 1; }
+  for _ in $(seq 1 10); do
+    k logs "$pod" --since=1m > "$work/waf.log"
+    if awk -v probe="$probe" 'index($0, probe) && /\[id "14855"\]|"ruleId":[[:space:]]*"14855"/ { found=1 } END { exit !found }' "$work/waf.log"; then
+      waf_logged=true
+      break
+    fi
+    sleep 1
+  done
+  [[ "$waf_logged" == true ]] || { echo "Missing ModSecurity rule 14855 log entry for $probe" >&2; return 1; }
   stop_forward
   echo "Verified $expected"
 }

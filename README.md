@@ -2,7 +2,9 @@
 
 Qualytics brings together community and open-source maintenance work to provide an ingress controller for existing self-hosted deployments. It builds on the final Kubernetes ingress-nginx controller release with a maintained NGINX runtime, ModSecurity, and the OWASP Core Rule Set. [Upstream controller](https://github.com/kubernetes/ingress-nginx/releases/tag/controller-v1.15.1)
 
-The Qualytics image repository is `docker.io/qualyticsai/ingress-nginx-controller`. Select the tag and digest from the same Qualytics release. The self-hosted chart accepts them under `nginx.controller.image` and owns the Service, webhook and Ingress resources. [Qualytics releases](https://github.com/Qualytics/ingress-nginx/releases) · [Helm chart and image inventory](https://github.com/Qualytics/qualytics-self-hosted/blob/main/docs/docker-images.md)
+Qualytics publishes the `ingress-nginx` Helm chart at `https://qualytics.github.io/ingress-nginx`. The Qualytics self-hosted chart includes it as the optional `nginx` dependency. Existing installations keep their `nginx.*` values. [Standalone chart](charts/ingress-nginx/README.md) · [Self-hosted image inventory](https://github.com/Qualytics/qualytics-self-hosted/blob/main/docs/docker-images.md)
+
+The chart pins the Linux amd64 and arm64 image index by digest. Docker Hub hosts the standard image at `qualyticsai/ingress-nginx-controller` and the chroot image at `qualyticsai/ingress-nginx-controller-chroot`. Each index includes an SBOM and build provenance for each architecture. The attached Sigstore bundle signs the exact index with the Qualytics GitHub Actions release identity. [Release workflow](.github/workflows/qualytics-controller.yml) · [Signature verification](build/publish-controller.sh)
 
 ## Overview
 
@@ -23,10 +25,7 @@ For a Qualytics deployment, contact Qualytics Support. Include the chart version
 
 ## Changelog
 
-See [the list of releases](https://github.com/kubernetes/ingress-nginx/releases) for all changes.
-For detailed changes for each release, please check the [changelog-$version.md](./changelog) file for the release version.
-For detailed changes on the `ingress-nginx` helm chart, please check the changelog folder for a specific version.
-[CHANGELOG-$current-version.md](./charts/ingress-nginx/changelog) file.
+Qualytics publishes chart packages in [Qualytics releases](https://github.com/Qualytics/ingress-nginx/releases). The earlier controller and chart history is available in [Kubernetes releases](https://github.com/kubernetes/ingress-nginx/releases).
 
 ### Historical upstream version matrix
 
@@ -105,14 +104,6 @@ Thanks for taking the time to join our community and start contributing!
 
   - Read [`CONTRIBUTING.md`](CONTRIBUTING.md) for information about the workflow that we
     expect and instructions on the developer certificate of origin that we require.
-  - Join our Kubernetes Slack channel for developer discussion : [#ingress-nginx-dev](https://kubernetes.slack.com/archives/C021E147ZA4).
-  - Submit GitHub issues for documentation problems.
-    - Please make sure to read the [Issue Reporting Checklist](https://github.com/kubernetes/ingress-nginx/blob/main/CONTRIBUTING.md#issue-reporting-guidelines) before opening an issue. Issues not conforming to the guidelines **may be closed immediately**.
-
-- **Support**:
-
-  - Join the [#ingress-nginx-users](https://kubernetes.slack.com/messages/CANQGM8BA/) channel inside the [Kubernetes Slack](http://slack.kubernetes.io/) to ask questions or get support from the maintainers and other users.
-  - The [GitHub issues](https://github.com/kubernetes/ingress-nginx/issues) in the repository are **exclusively** for bug reports and feature requests.
 
 ## License
 
