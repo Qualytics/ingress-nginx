@@ -59,7 +59,7 @@ jobs:
             rendered=$(helm template validate . --set "controller.image.chroot=$chroot" --show-only templates/controller-deployment.yaml |
               yq -r '.spec.template.spec.containers[0].image')
             [[ "$rendered" == "$repo:$tag@$pin" ]]
-            skopeo inspect --raw "docker://$repo:$tag" > "$RUNNER_TEMP/index.json"
+            skopeo inspect --no-creds --raw "docker://$repo:$tag" > "$RUNNER_TEMP/index.json"
             [[ "$(skopeo manifest-digest "$RUNNER_TEMP/index.json")" == "$pin" ]]
             jq -e '([.manifests[].platform | select(.os == "linux") | .architecture] | unique) == ["amd64","arm64"]' "$RUNNER_TEMP/index.json"
           done

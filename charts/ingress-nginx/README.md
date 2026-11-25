@@ -351,8 +351,8 @@ metadata:
 | controller.hostname | object | `{}` | Optionally customize the pod hostname. |
 | controller.image.allowPrivilegeEscalation | bool | `false` |  |
 | controller.image.chroot | bool | `false` |  |
-| controller.image.digest | string | `""` |  |
-| controller.image.digestChroot | string | `""` |  |
+| controller.image.digest | string | `"sha256:061bbab1999054242764d5476a195b383c4357206cceebe4a505160b3401da16"` |  |
+| controller.image.digestChroot | string | `"sha256:724ea15cfb4b36c89822274d339c9b3046e767c8d26f4fa4d2f5d98fa76db839"` |  |
 | controller.image.image | string | `"qualyticsai/ingress-nginx-controller"` |  |
 | controller.image.pullPolicy | string | `"IfNotPresent"` |  |
 | controller.image.readOnlyRootFilesystem | bool | `false` |  |

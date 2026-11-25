@@ -31,8 +31,8 @@ controller:
     ## use *either* current default registry/image or repository format or installing chart by providing the values.yaml will fail
     ## repository:
     tag: "v1.30.8-qualytics.1"
-    digest: ""
-    digestChroot: ""
+    digest: sha256:061bbab1999054242764d5476a195b383c4357206cceebe4a505160b3401da16
+    digestChroot: sha256:724ea15cfb4b36c89822274d339c9b3046e767c8d26f4fa4d2f5d98fa76db839
     pullPolicy: IfNotPresent
     runAsNonRoot: true
     # -- This value must not be changed using the official image.
