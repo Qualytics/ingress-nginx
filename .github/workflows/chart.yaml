@@ -98,6 +98,17 @@ jobs:
       - uses: helm/chart-releaser-action@cae68fefc6b5f367a0275617c9f83181ba54714f # v1.7.0
         with:
           install_only: true
+      - uses: sigstore/cosign-installer@881c63bd87e38389154debd8331404ce7ca8a3ab # v4.1.4
+        with:
+          cosign-release: v3.1.5
+      - name: Publish the verified controller release metadata
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag=$(bash build/verify-controller-release.sh)
+          if [[ -n "$tag" ]]; then
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --latest=false
+          fi
       - name: Release package and update the GitHub Pages index
         env:
           CR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
