@@ -63,7 +63,7 @@ if published=$(gh release view "$tag" --repo Qualytics/ingress-nginx --json asse
     gh release upload "$tag" --repo Qualytics/ingress-nginx "${missing[@]}"
   fi
 else
-  gh release create "$tag" "${metadata[@]}" --repo Qualytics/ingress-nginx \
+  gh release create "$tag" "${metadata[@]}" --repo Qualytics/ingress-nginx --draft \
     --target "$(git rev-parse HEAD)" --latest=false --title "Qualytics ingress-nginx $version" \
     --notes "Signed multiarchitecture image indexes, Sigstore bundles and software bills of materials for the standard and chroot controllers. Images are available to authenticated Qualytics customers on Docker Hub."
 fi
