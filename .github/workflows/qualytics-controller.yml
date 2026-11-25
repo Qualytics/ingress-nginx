@@ -99,6 +99,24 @@ jobs:
           ignore-unfixed: false
         env:
           TRIVY_IMAGE_SRC: docker
+      - name: Verify the installed libxml2 package and ModSecurity linkage
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          root=/
+          if [[ "$VARIANT" == controller-chroot ]]; then root=/chroot; fi
+          docker run --rm --network none --user 0 --entrypoint sh \
+            --mount "type=bind,src=$PWD/images/nginx/rootfs/libxml2,dst=/packages/libxml2,readonly" \
+            "qualytics-$VARIANT:qualification" -ec '
+            root=$1
+            apk --root "$root" info --installed --quiet "libxml2=2.13.9-r4"
+            apk --root "$root" info --who-owns /usr/lib/libxml2.so.2.13.9 | grep -F "libxml2-2.13.9-r4"
+            cd "$root"
+            apk manifest "/packages/libxml2/$(apk --print-arch)/libxml2-2.13.9-r4.apk" | sed "s/^sha1://" | sha1sum -c
+            loader=$(basename "$root"/lib/ld-musl-*.so.1)
+            libraries=$(chroot "$root" "/lib/$loader" --list /usr/local/modsecurity/lib/libmodsecurity.so)
+            echo "$libraries" | grep -F "libxml2.so.2 => /usr/lib/libxml2.so.2"
+          ' sh "$root"
       - name: Run Qualytics chart qualification
         env:
           VARIANT: ${{ matrix.variant }}
@@ -114,7 +132,7 @@ jobs:
           path: ${{ runner.temp }}/${{ matrix.variant }}-${{ matrix.arch }}.tar
           if-no-files-found: error
           compression-level: 0
-          retention-days: 3
+          retention-days: 1
 
   sign:
     needs: [unit, qualify]
