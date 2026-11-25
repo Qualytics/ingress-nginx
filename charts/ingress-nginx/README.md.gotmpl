@@ -18,11 +18,13 @@ helm repo update
 
 ## Install Chart
 
+The controller and chroot images are private Docker Hub repositories. Use credentials with pull access to both `qualyticsai/ingress-nginx-controller` and `qualyticsai/ingress-nginx-controller-chroot`. When your credentials are stored in a Kubernetes Secret, create it in the release namespace and pass its name to Helm.
+
 ```console
-helm install [RELEASE_NAME] qualytics-ingress/ingress-nginx
+helm install [RELEASE_NAME] qualytics-ingress/ingress-nginx --namespace [NAMESPACE] --set 'imagePullSecrets[0].name=regcred'
 ```
 
-The command deploys ingress-nginx on the Kubernetes cluster in the default configuration.
+Replace `regcred` with your registry Secret name. Omit the flag if the cluster already authenticates pulls through its ServiceAccount or nodes. A parent chart can supply `global.imagePullSecrets`. An explicit `imagePullSecrets` list takes precedence, including an empty list.
 
 _See [configuration](#configuration) below._
 
@@ -49,6 +51,8 @@ _See [helm upgrade](https://helm.sh/docs/helm/helm_upgrade/) for command documen
 For an existing upstream chart 4.15.1 installation, use its release name, namespace and operator-supplied values. Review any explicit controller image, tag and digest overrides so the upgrade selects the intended image. The validating webhook jobs and optional default backend use their existing upstream repositories.
 
 For a private mirror, set `global.image.registry` to mirror all images, or set `controller.image.registry` and `controller.image.image` for the controller alone. `controller.image.repository` accepts a fully qualified repository. With that override and `controller.image.chroot: true`, supply the complete chroot repository name. Preserve the published index digests when mirroring.
+
+The chart package includes both signed image indexes and their Sigstore bundles under `provenance/<controller tag>/`. Chart CI verifies the signing workflow, each pinned digest, image name, version and supported architectures.
 
 ### Migrating from stable/nginx-ingress
 

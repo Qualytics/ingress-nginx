@@ -32,13 +32,17 @@ jobs:
           helm lint --strict charts/ingress-nginx
           helm plugin install https://github.com/helm-unittest/helm-unittest --version v1.0.0 --verify=false
           helm unittest charts/ingress-nginx --file 'tests/**/*_test.yaml'
-      - name: Verify published controller image pins
+      - uses: sigstore/cosign-installer@881c63bd87e38389154debd8331404ce7ca8a3ab # v4.1.4
+        with:
+          cosign-release: v3.1.5
+      - name: Verify signed controller image pins
         id: images
         working-directory: charts/ingress-nginx
         run: |
           set -euo pipefail
           tag=$(yq -r '.controller.image.tag' values.yaml)
           [[ "$tag" == "v$(yq -r '.appVersion' Chart.yaml)" ]]
+          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-qualytics\.[0-9]+$ ]]
           digest=$(yq -r '.controller.image.digest' values.yaml)
           chroot_digest=$(yq -r '.controller.image.digestChroot' values.yaml)
           if [[ -z "$digest" && -z "$chroot_digest" ]]; then
@@ -47,21 +51,30 @@ jobs:
             exit 0
           fi
           [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ && "$chroot_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
-          sudo apt-get update -qq
-          sudo apt-get install -y skopeo
+          source=https://github.com/Qualytics/ingress-nginx
+          identity="$source/.github/workflows/qualytics-controller.yml@refs/heads/main"
           for chroot in false true; do
-            repo=docker.io/qualyticsai/ingress-nginx-controller
+            variant=controller
             pin=$digest
             if [[ "$chroot" == true ]]; then
-              repo+=-chroot
+              variant=controller-chroot
               pin=$chroot_digest
             fi
+            repo="docker.io/qualyticsai/ingress-nginx-$variant"
             rendered=$(helm template validate . --set "controller.image.chroot=$chroot" --show-only templates/controller-deployment.yaml |
               yq -r '.spec.template.spec.containers[0].image')
             [[ "$rendered" == "$repo:$tag@$pin" ]]
-            skopeo inspect --no-creds --raw "docker://$repo:$tag" > "$RUNNER_TEMP/index.json"
-            [[ "$(skopeo manifest-digest "$RUNNER_TEMP/index.json")" == "$pin" ]]
-            jq -e '([.manifests[].platform | select(.os == "linux") | .architecture] | unique) == ["amd64","arm64"]' "$RUNNER_TEMP/index.json"
+            index="provenance/$tag/$variant.index.json"
+            bundle="provenance/$tag/$variant.sigstore.json"
+            cosign verify-blob --bundle "$bundle" --certificate-identity "$identity" \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com "$index"
+            [[ "sha256:$(sha256sum "$index" | cut -d ' ' -f 1)" == "$pin" ]]
+            jq -e --arg repo "$repo" --arg tag "$tag" --arg source "$source" '
+              .annotations["org.opencontainers.image.ref.name"] == $repo and
+              .annotations["org.opencontainers.image.version"] == $tag and
+              .annotations["org.opencontainers.image.source"] == $source and
+              ([.manifests[].platform | select(.os == "linux") | .architecture] | sort) == ["amd64","arm64"]
+            ' "$index"
           done
           echo "ready=true" >> "$GITHUB_OUTPUT"
 

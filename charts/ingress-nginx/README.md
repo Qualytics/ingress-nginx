@@ -21,11 +21,13 @@ helm repo update
 
 ## Install Chart
 
+The controller and chroot images are private Docker Hub repositories. Use credentials with pull access to both `qualyticsai/ingress-nginx-controller` and `qualyticsai/ingress-nginx-controller-chroot`. When your credentials are stored in a Kubernetes Secret, create it in the release namespace and pass its name to Helm.
+
 ```console
-helm install [RELEASE_NAME] qualytics-ingress/ingress-nginx
+helm install [RELEASE_NAME] qualytics-ingress/ingress-nginx --namespace [NAMESPACE] --set 'imagePullSecrets[0].name=regcred'
 ```
 
-The command deploys ingress-nginx on the Kubernetes cluster in the default configuration.
+Replace `regcred` with your registry Secret name. Omit the flag if the cluster already authenticates pulls through its ServiceAccount or nodes. A parent chart can supply `global.imagePullSecrets`. An explicit `imagePullSecrets` list takes precedence, including an empty list.
 
 _See [configuration](#configuration) below._
 
@@ -52,6 +54,8 @@ _See [helm upgrade](https://helm.sh/docs/helm/helm_upgrade/) for command documen
 For an existing upstream chart 4.15.1 installation, use its release name, namespace and operator-supplied values. Review any explicit controller image, tag and digest overrides so the upgrade selects the intended image. The validating webhook jobs and optional default backend use their existing upstream repositories.
 
 For a private mirror, set `global.image.registry` to mirror all images, or set `controller.image.registry` and `controller.image.image` for the controller alone. `controller.image.repository` accepts a fully qualified repository. With that override and `controller.image.chroot: true`, supply the complete chroot repository name. Preserve the published index digests when mirroring.
+
+The chart package includes both signed image indexes and their Sigstore bundles under `provenance/<controller tag>/`. Chart CI verifies the signing workflow, each pinned digest, image name, version and supported architectures.
 
 ### Migrating from stable/nginx-ingress
 
@@ -577,7 +581,7 @@ metadata:
 | defaultBackend.updateStrategy | object | `{}` | The update strategy to apply to the Deployment or DaemonSet # |
 | dhParam | string | `""` | A base64-encoded Diffie-Hellman parameter. This can be generated with: `openssl dhparam 4096 2> /dev/null | base64` # Ref: https://github.com/kubernetes/ingress-nginx/tree/main/docs/examples/customization/ssl-dh-param |
 | global.image.registry | string | `""` | Override the registry for all images. By default the controller uses docker.io and upstream components use registry.k8s.io. |
-| imagePullSecrets | list | `[]` | Optional array of imagePullSecrets containing private registry credentials # Ref: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/ |
+| imagePullSecrets | list | `nil` | Names of registry pull Secrets in the release namespace, for example `[{name: regcred}]`. Inherits `global.imagePullSecrets` when unset. Use `[]` to rely on ServiceAccount or node credentials. # Ref: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/ |
 | namespaceOverride | string | `""` | Override the deployment namespace; defaults to .Release.Namespace |
 | portNamePrefix | string | `""` | Prefix for TCP and UDP ports names in ingress controller service # Some cloud providers, like Yandex Cloud may have a requirements for a port name regex to support cloud load balancer integration |
 | rbac.create | bool | `true` |  |

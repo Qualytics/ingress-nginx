@@ -40,9 +40,7 @@ spec:
     {{- if .Values.controller.admissionWebhooks.patch.runtimeClassName }}
       runtimeClassName: {{ .Values.controller.admissionWebhooks.patch.runtimeClassName | quote }}
     {{- end }}
-    {{- if .Values.imagePullSecrets }}
-      imagePullSecrets: {{ toYaml .Values.imagePullSecrets | nindent 8 }}
-    {{- end }}
+      {{- include "ingress-nginx.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: patch
           {{- with (merge .Values.controller.admissionWebhooks.patch.image .Values.global.image) }}

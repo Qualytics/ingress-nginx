@@ -79,6 +79,22 @@ Get specific image
 {{- end -}}
 
 {{/*
+Local image pull secrets override a parent chart's global registry credentials.
+*/}}
+{{- define "ingress-nginx.imagePullSecrets" -}}
+{{- $secrets := .Values.imagePullSecrets -}}
+{{- if eq $secrets nil -}}
+{{- $secrets = .Values.global.imagePullSecrets -}}
+{{- end -}}
+{{- with $secrets }}
+imagePullSecrets:
+{{- range . }}
+  - name: {{ if kindIs "string" . }}{{ . | quote }}{{ else }}{{ .name | quote }}{{ end }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{/*
 Resolve the controller image, retaining the upstream registry for custom image paths.
 */}}
 {{- define "ingress-nginx.controllerImage" -}}

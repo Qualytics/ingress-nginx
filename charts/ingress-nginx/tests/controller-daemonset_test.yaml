@@ -209,6 +209,16 @@ tests:
           path: spec.template.spec.containers[0].image
           value: docker.io/qualyticsai/ingress-nginx-controller:custom-tag@sha256:faa2d18687f734994b6bd9e309e7a73852a81c30e1b8f63165fcd4f0a087e3cd
 
+  - it: inherits registry credentials when running as a DaemonSet
+    set:
+      controller.kind: DaemonSet
+      global.imagePullSecrets: [cluster-registry]
+    asserts:
+      - equal:
+          path: spec.template.spec.imagePullSecrets
+          value:
+            - name: cluster-registry
+
   - it: uses the Qualytics chroot image and its own digest
     set:
       controller.kind: DaemonSet

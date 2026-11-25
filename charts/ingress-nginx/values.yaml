@@ -1249,9 +1249,9 @@ serviceAccount:
   automountServiceAccountToken: true
   # -- Annotations for the controller service account
   annotations: {}
-# -- Optional array of imagePullSecrets containing private registry credentials
+# -- (list) Names of registry pull Secrets in the release namespace, for example `[{name: regcred}]`. Inherits `global.imagePullSecrets` when unset. Use `[]` to rely on ServiceAccount or node credentials.
 ## Ref: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
-imagePullSecrets: []
+imagePullSecrets: null
 # - name: secretName
 
 # -- TCP service key-value pairs
