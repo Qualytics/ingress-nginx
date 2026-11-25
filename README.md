@@ -1,48 +1,33 @@
-# Ingress NGINX Retirement
+# Qualytics Ingress NGINX Controller
 
-## Retiring
+Qualytics brings together community and open-source maintenance work to provide an ingress controller for existing self-hosted deployments. It builds on the final Kubernetes ingress-nginx controller release with a maintained NGINX runtime, ModSecurity, and the OWASP Core Rule Set. [Upstream controller](https://github.com/kubernetes/ingress-nginx/releases/tag/controller-v1.15.1)
 
-[What You Need to Know about Ingress NGINX Retirement](https://www.kubernetes.io/blog/2025/11/11/ingress-nginx-retirement/):
+Qualytics publishes the `ingress-nginx` Helm chart at `https://qualytics.github.io/ingress-nginx`. The Qualytics self-hosted chart includes it as the optional `nginx` dependency. Existing installations keep their `nginx.*` values. [Standalone chart](charts/ingress-nginx/README.md) · [Self-hosted image inventory](https://github.com/Qualytics/qualytics-self-hosted/blob/main/docs/docker-images.md)
 
-* Best-effort maintenance will continue until March 2026.
-* Afterward, there will be no further releases, no bugfixes, and no updates to resolve any security vulnerabilities that may be discovered.
-* Existing deployments of Ingress NGINX will not be broken.
-  * Existing project artifacts such as Helm charts and container images will remain available.
-
-# Ingress NGINX Controller
-
-[![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/5691/badge)](https://bestpractices.coreinfrastructure.org/projects/5691)
-[![Go Report Card](https://goreportcard.com/badge/github.com/kubernetes/ingress-nginx)](https://goreportcard.com/report/github.com/kubernetes/ingress-nginx)
-[![GitHub license](https://img.shields.io/github/license/kubernetes/ingress-nginx.svg)](https://github.com/kubernetes/ingress-nginx/blob/main/LICENSE)
-[![GitHub stars](https://img.shields.io/github/stars/kubernetes/ingress-nginx.svg)](https://github.com/kubernetes/ingress-nginx/stargazers)
+The chart pins the Linux amd64 and arm64 image index by digest. Docker Hub hosts the standard image at `qualyticsai/ingress-nginx-controller` and the chroot image at `qualyticsai/ingress-nginx-controller-chroot`. Each index includes an SBOM and build provenance for each architecture. The attached Sigstore bundle signs the exact index with the Qualytics GitHub Actions release identity. [Release workflow](.github/workflows/qualytics-controller.yml) · [Signature verification](build/publish-controller.sh)
 
 ## Overview
 
-ingress-nginx was an Ingress controller for Kubernetes using [NGINX](https://www.nginx.org/) as a reverse proxy and load
+ingress-nginx is an Ingress controller for Kubernetes using [NGINX](https://www.nginx.org/) as a reverse proxy and load
 balancer.
 
 [Learn more about Ingress on the Kubernetes documentation site](https://kubernetes.io/docs/concepts/services-networking/ingress/).
 
 ## Usage warnings
 
-If you are not already using ingress-nginx, you should not be deploying it as it is [not being developed](#retiring). Instead you should identify a [Gateway API](https://gateway-api.sigs.k8s.io/guides/) implementation and use it.
+Kubernetes retired the upstream project in March 2026 and recommends Gateway API for new installations. [Retirement notice](https://kubernetes.io/blog/2025/11/11/ingress-nginx-retirement/)
 
 Do not use in multi-tenant Kubernetes production installations. This project assumes that users that can create Ingress objects are administrators of the cluster. See the [FAQ](https://kubernetes.github.io/ingress-nginx/faq/#faq) for more.
 
 ## Troubleshooting
 
-If you encounter issues, review the [troubleshooting docs](docs/troubleshooting.md),
-[search for an issue](https://github.com/kubernetes/ingress-nginx/issues), or talk to us on the
-[#ingress-nginx-users channel](https://kubernetes.slack.com/messages/ingress-nginx-users) on the Kubernetes Slack server.
+For a Qualytics deployment, contact Qualytics Support. Include the chart version, controller image digest, and Kubernetes version. For confidential security reports, see the [security policy](SECURITY.md).
 
 ## Changelog
 
-See [the list of releases](https://github.com/kubernetes/ingress-nginx/releases) for all changes.
-For detailed changes for each release, please check the [changelog-$version.md](./changelog) file for the release version.
-For detailed changes on the `ingress-nginx` helm chart, please check the changelog folder for a specific version.
-[CHANGELOG-$current-version.md](./charts/ingress-nginx/changelog) file.
+Qualytics publishes chart packages in [Qualytics releases](https://github.com/Qualytics/ingress-nginx/releases). The earlier controller and chart history is available in [Kubernetes releases](https://github.com/kubernetes/ingress-nginx/releases).
 
-### Supported Versions table
+### Historical upstream version matrix
 
 Supported versions for the ingress-nginx project mean that we have completed E2E tests, and they are passing for
 the versions listed. Ingress-Nginx versions **may** work on older versions, but the project does not make that guarantee.
@@ -119,14 +104,6 @@ Thanks for taking the time to join our community and start contributing!
 
   - Read [`CONTRIBUTING.md`](CONTRIBUTING.md) for information about the workflow that we
     expect and instructions on the developer certificate of origin that we require.
-  - Join our Kubernetes Slack channel for developer discussion : [#ingress-nginx-dev](https://kubernetes.slack.com/archives/C021E147ZA4).
-  - Submit GitHub issues for documentation problems.
-    - Please make sure to read the [Issue Reporting Checklist](https://github.com/kubernetes/ingress-nginx/blob/main/CONTRIBUTING.md#issue-reporting-guidelines) before opening an issue. Issues not conforming to the guidelines **may be closed immediately**.
-
-- **Support**:
-
-  - Join the [#ingress-nginx-users](https://kubernetes.slack.com/messages/CANQGM8BA/) channel inside the [Kubernetes Slack](http://slack.kubernetes.io/) to ask questions or get support from the maintainers and other users.
-  - The [GitHub issues](https://github.com/kubernetes/ingress-nginx/issues) in the repository are **exclusively** for bug reports and feature requests.
 
 ## License
 

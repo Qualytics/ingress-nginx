@@ -13,6 +13,13 @@
 # limitations under the License.
 
 ARG BASE_IMAGE
+ARG BINARY_SOURCE=local-binaries
+
+FROM scratch AS local-binaries
+ARG TARGETARCH
+COPY bin/${TARGETARCH}/ /
+
+FROM ${BINARY_SOURCE} AS controller-binaries
 
 FROM ${BASE_IMAGE}
 
@@ -22,9 +29,9 @@ ARG COMMIT_SHA
 ARG BUILD_ID=UNSET
 
 LABEL org.opencontainers.image.title="NGINX Ingress Controller for Kubernetes"
-LABEL org.opencontainers.image.documentation="https://kubernetes.github.io/ingress-nginx/"
-LABEL org.opencontainers.image.source="https://github.com/kubernetes/ingress-nginx"
-LABEL org.opencontainers.image.vendor="The Kubernetes Authors"
+LABEL org.opencontainers.image.documentation="https://github.com/Qualytics/ingress-nginx"
+LABEL org.opencontainers.image.source="https://github.com/Qualytics/ingress-nginx"
+LABEL org.opencontainers.image.vendor="Qualytics"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 LABEL org.opencontainers.image.version="${VERSION}"
 LABEL org.opencontainers.image.revision="${COMMIT_SHA}"
@@ -41,9 +48,7 @@ RUN apk update \
 
 COPY --chown=www-data:www-data etc /etc
 
-COPY --chown=www-data:www-data bin/${TARGETARCH}/dbg /
-COPY --chown=www-data:www-data bin/${TARGETARCH}/nginx-ingress-controller /
-COPY --chown=www-data:www-data bin/${TARGETARCH}/wait-shutdown /
+COPY --from=controller-binaries --chown=www-data:www-data /dbg /nginx-ingress-controller /wait-shutdown /
 
 # Fix permission during the build to avoid issues at runtime
 # with volumes (custom templates)
@@ -65,7 +70,7 @@ RUN bash -xeu -c ' \
   # LD_LIBRARY_PATH does not work so below is needed for  opentelemetry/other modules
   # Put libs of newer modules under `/modules_mount/<other>/lib` and add that path below
   # Could get complicated arch specific paths become a need
-  && echo "/lib:/usr/lib:/usr/local/lib:/modules_mount/etc/nginx/modules/otel" > /etc/ld-musl-x86_64.path
+  && echo "/lib:/usr/lib:/usr/local/lib:/modules_mount/etc/nginx/modules/otel" > "/etc/ld-musl-$(uname -m).path"
   
 
 RUN apk add --no-cache libcap \

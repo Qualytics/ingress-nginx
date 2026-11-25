@@ -11,7 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-FROM alpine:3.23.3 AS builder
+ARG ALPINE_IMAGE=docker.io/library/alpine:3.23.8@sha256:469c9ea410b9215eaee7976ba6c0639039b444be8e5d638f7abbada189971eb2
+FROM ${ALPINE_IMAGE} AS builder
+ARG BUILD_JOBS
 
 COPY . /
 
@@ -21,7 +23,7 @@ RUN apk update \
   && /build.sh
 
 # Use a multi-stage build
-FROM alpine:3.23.3
+FROM ${ALPINE_IMAGE}
 
 ENV PATH=$PATH:/usr/local/luajit/bin:/usr/local/nginx/sbin:/usr/local/nginx/bin
 
@@ -39,6 +41,7 @@ RUN apk update \
   bash \
   openssl \
   pcre \
+  pcre2 \
   zlib \
   ca-certificates \
   patch \

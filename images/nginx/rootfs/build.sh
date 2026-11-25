@@ -18,7 +18,7 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-export NGINX_VERSION=1.27.1
+export NGINX_VERSION=1.30.8
 
 # Check for recent changes: https://github.com/vision5/ngx_devel_kit/compare/v0.3.3...master
 export NDK_VERSION=v0.3.3
@@ -35,11 +35,11 @@ export NGINX_DIGEST_AUTH=v1.0.0
 # Check for recent changes: https://github.com/owasp-modsecurity/ModSecurity-nginx/compare/v1.0.4...master
 export MODSECURITY_VERSION=v1.0.4
 
-# Check for recent changes: https://github.com/owasp-modsecurity/ModSecurity/compare/v3.0.14...v3/master
-export MODSECURITY_LIB_VERSION=v3.0.14
+# Check for recent changes: https://github.com/owasp-modsecurity/ModSecurity/compare/v3.0.17...v3/master
+export MODSECURITY_LIB_VERSION=v3.0.17
 
-# Check for recent changes: https://github.com/coreruleset/coreruleset/compare/v4.22.0...main
-export OWASP_MODSECURITY_CRS_VERSION=v4.22.0
+# CRS 4.31+ requires pipe-delimited allowed_methods; existing Ingress snippets use spaces.
+export OWASP_MODSECURITY_CRS_VERSION=v4.30.0
 
 # Check for recent changes: https://github.com/openresty/lua-nginx-module/compare/v0.10.28...master
 export LUA_NGX_VERSION=v0.10.28
@@ -111,25 +111,19 @@ export BUILD_PATH=/tmp/build
 
 ARCH=$(uname -m)
 
-get_src()
-{
-  hash="$1"
-  url="$2"
-  dest="${3-}"
-  ARGS=""
-  f=$(basename "$url")
-
+get_src() {
+  local hash="$1" url="$2" dest="${3-}" archive
+  archive=$(basename "$url")
   echo "Downloading $url"
-
-  curl -sSL "$url" -o "$f"
-  # TODO: Reenable checksum verification but make it smarter
-  # echo "$hash  $f" | sha256sum -c - || exit 10
-  if [ ! -z "$dest" ]; then
-        mkdir ${BUILD_PATH}/${dest}
-        ARGS="-C ${BUILD_PATH}/${dest} --strip-components=1"
+  curl --fail --silent --show-error --location --retry 5 --retry-all-errors "$url" -o "$archive"
+  printf '%s  %s\n' "$hash" "$archive" | sha256sum -c -
+  if [[ -n "$dest" ]]; then
+    mkdir -p "$dest"
+    tar -xzf "$archive" -C "$dest" --strip-components=1
+  else
+    tar -xzf "$archive"
   fi
-  tar xvzf "$f" $ARGS
-  rm -rf "$f"
+  rm "$archive"
 }
 
 # install required packages to build
@@ -143,6 +137,7 @@ apk add \
   automake \
   openssl-dev \
   pcre-dev \
+  pcre2-dev \
   zlib-dev \
   linux-headers \
   libxslt-dev \
@@ -189,95 +184,106 @@ mkdir --verbose -p "$BUILD_PATH"
 cd "$BUILD_PATH"
 
 # download, verify and extract the source files
-get_src 66dc7081488811e9f925719e34d1b4504c2801c81dee2920e5452a86b11405ae \
+get_src f867314ada32e717b949930859656c48a72dc6657aec598db58af2f98a40e1c1 \
         "https://nginx.org/download/nginx-$NGINX_VERSION.tar.gz"
 
-get_src aa961eafb8317e0eb8da37eb6e2c9ff42267edd18b56947384e719b85188f58b \
+get_src faa2fcd5168b10764d35081356511d5f84db5c526a1aa4b6add2db94b6853b2b \
         "https://github.com/vision5/ngx_devel_kit/archive/$NDK_VERSION.tar.gz" "ngx_devel_kit"
 
-get_src abc123 \
+get_src e0330194b72f2fe4c0ce3ece06b02dc4aa0ab491eb75bf42c6f5e283912e468c \
         "https://github.com/open-telemetry/opentelemetry-cpp/archive/$OPENTELEMETRY_CPP_VERSION.tar.gz" "opentelemetry-cpp"
 
-get_src abc123 \
+get_src 08f40636adbc5f33d2084bd8e7b64e491dd0239d1a95021dbffbdf1ca8cea454 \
         "https://github.com/open-telemetry/opentelemetry-proto/archive/$OPENTELEMETRY_PROTO_VERSION.tar.gz" "opentelemetry-proto"
 
 get_src cd5e2cc834bcfa30149e7511f2b5a2183baf0b70dc091af717a89a64e44a2985 \
         "https://github.com/openresty/set-misc-nginx-module/archive/$SETMISC_VERSION.tar.gz" "set-misc-nginx-module"
 
-get_src 0c0d2ced2ce895b3f45eb2b230cd90508ab2a773299f153de14a43e44c1209b3 \
+get_src cf6e169d6b350c06d0c730b0eaf4973394026ad40094cddd3b3a5b346577019d \
         "https://github.com/openresty/headers-more-nginx-module/archive/$MORE_HEADERS_VERSION.tar.gz" "headers-more-nginx-module"
 
 get_src f09851e6309560a8ff3e901548405066c83f1f6ff88aa7171e0763bd9514762b \
         "https://github.com/atomx/nginx-http-auth-digest/archive/$NGINX_DIGEST_AUTH.tar.gz" "nginx-http-auth-digest"
 
-get_src 32a42256616cc674dca24c8654397390adff15b888b77eb74e0687f023c8751b \
+get_src bb596d146ad0650014168dda9dc8d07c50a070010044c95ed0d167a9a78e63a1 \
         "https://github.com/owasp-modsecurity/ModSecurity-nginx/archive/$MODSECURITY_VERSION.tar.gz" "ModSecurity-nginx"
 
-get_src bc764db42830aeaf74755754b900253c233ad57498debe7a441cee2c6f4b07c2 \
+get_src 634827d54de6216cb0502d14f76610788b3a3e33160e91d5578d6db0d9a34a20 \
         "https://github.com/openresty/lua-nginx-module/archive/$LUA_NGX_VERSION.tar.gz" "lua-nginx-module"
 
-get_src 01b715754a8248cc7228e0c8f97f7488ae429d90208de0481394e35d24cef32f \
+get_src 3b1103cf5ee940ea94711eae1a7ccc1a161273ec9a08eb415f1d45ad385f967d \
         "https://github.com/openresty/stream-lua-nginx-module/archive/$LUA_STREAM_NGX_VERSION.tar.gz" "stream-lua-nginx-module"
 
-get_src a92c9ee6682567605ece55d4eed5d1d54446ba6fba748cff0a2482aea5713d5f \
+get_src 2a69815e4ae01aa8b170941a8e1a10b6f6a9aab699dee485d58f021dd933829a \
         "https://github.com/openresty/lua-upstream-nginx-module/archive/$LUA_UPSTREAM_VERSION.tar.gz" "lua-upstream-nginx-module"
 
-get_src 77bbcbb24c3c78f51560017288f3118d995fe71240aa379f5818ff6b166712ff \
+get_src 68ff3dc2cc97969f7385679da7c9ff96738aa9cc275fa6bab77316eb3340ea8e \
         "https://github.com/openresty/luajit2/archive/$LUAJIT_VERSION.tar.gz" "luajit2"
 
-get_src b6c9c09fd43eb34a71e706ad780b2ead26549a9a9f59280fe558f5b7b980b7c6 \
+get_src 5e2113ed09cdd710908df8c6d1630616eeacb9216ef8705a06c25733394ddf28 \
         "https://github.com/leev/ngx_http_geoip2_module/archive/$GEOIP2_VERSION.tar.gz" "ngx_http_geoip2_module"
 
 get_src deb4ab1ffb9f3d962c4b4a2c4bdff692b86a209e3835ae71ebdf3b97189e40a9 \
         "https://github.com/openresty/lua-resty-upload/archive/$LUA_RESTY_UPLOAD_VERSION.tar.gz" "lua-resty-upload"
 
-get_src bdbf271003d95aa91cab0a92f24dca129e99b33f79c13ebfcdbbcbb558129491 \
+get_src 77f006a97fd4a3be4a82dcf2d5f1482e399b70fb35454c5b5ad4b97ff1dded0d \
         "https://github.com/openresty/lua-resty-string/archive/$LUA_RESTY_STRING_VERSION.tar.gz" "lua-resty-string"
 
-get_src 16d72ed133f0c6df376a327386c3ef4e9406cf51003a700737c3805770ade7c5 \
+get_src 8b2ff4edefc240dea0d3adb9dd065a42e8c09e06ba8bb0a188464cf76c9e4d06 \
         "https://github.com/openresty/lua-resty-balancer/archive/$LUA_RESTY_BALANCER.tar.gz" "lua-resty-balancer"
 
-get_src 39baab9e2b31cc48cecf896cea40ef6e80559054fd8a6e440cc804a858ea84d4 \
+get_src a8af7beadd43dd4758b7dc3c00e027dd3908e73f5bf0e08155a2c8954c5937c0 \
         "https://github.com/openresty/lua-resty-core/archive/$LUA_RESTY_CORE.tar.gz" "lua-resty-core"
 
-get_src a77b9de160d81712f2f442e1de8b78a5a7ef0d08f13430ff619f79235db974d4 \
+get_src 14cac5c7a4520b33449a1fc961344556b8b6a2a2c6b739b0e46e3002e6e605bc \
         "https://github.com/openresty/lua-cjson/archive/$LUA_CJSON_VERSION.tar.gz" "lua-cjson"
 
-get_src 5ed48c36231e2622b001308622d46a0077525ac2f751e8cc0c9905914254baa4 \
+get_src c0217456f4c36bb9ebbf7dbcd733e3d70734330364c88df73e703c4777521ff9 \
         "https://github.com/cloudflare/lua-resty-cookie/archive/$LUA_RESTY_COOKIE_VERSION.tar.gz" "lua-resty-cookie"
 
-get_src 573184006b98ccee2594b0d134fa4d05e5d2afd5141cbad315051ccf7e9b6403 \
+get_src 8cf1a22e0d5b8f35cb0b2e14c58fcb3aa505a8fb6e956817f0cdb1f06593f072 \
         "https://github.com/openresty/lua-resty-lrucache/archive/$LUA_RESTY_CACHE.tar.gz" "lua-resty-lrucache"
 
 get_src b4ddcd47db347e9adf5c1e1491a6279a6ae2a3aff3155ef77ea0a65c998a69c1 \
         "https://github.com/openresty/lua-resty-lock/archive/$LUA_RESTY_LOCK.tar.gz" "lua-resty-lock"
 
-get_src 70e9a01eb32ccade0d5116a25bcffde0445b94ad35035ce06b94ccd260ad1bf0 \
+get_src ecc80b91bfb4f795b8a80acfa69e1778288ef60649ddd87f30a9c4a57ac5da79 \
         "https://github.com/openresty/lua-resty-dns/archive/$LUA_RESTY_DNS.tar.gz" "lua-resty-dns"
 
-get_src 9fcb6db95bc37b6fce77d3b3dc740d593f9d90dce0369b405eb04844d56ac43f \
+get_src 3da18ca8582243eff28302591e36651dc7fab046e77336aa4a6fa718bccce4a2 \
         "https://github.com/ledgetech/lua-resty-http/archive/$LUA_RESTY_HTTP.tar.gz" "lua-resty-http"
 
 get_src 02733575c4aed15f6cab662378e4b071c0a4a4d07940c4ef19a7319e9be943d4 \
         "https://github.com/openresty/lua-resty-memcached/archive/$LUA_RESTY_MEMCACHED_VERSION.tar.gz" "lua-resty-memcached"
 
-get_src c15aed1a01c88a3a6387d9af67a957dff670357f5fdb4ee182beb44635eef3f1 \
+get_src 927389dda41f07038481f89f925c44328446b2ee6ce3e667eeef51b7bd0ee836 \
         "https://github.com/openresty/lua-resty-redis/archive/$LUA_RESTY_REDIS_VERSION.tar.gz" "lua-resty-redis"
 
-get_src efb767487ea3f6031577b9b224467ddbda2ad51a41c5867a47582d4ad85d609e \
+get_src bf4f89c0c00d1e986260d22180cbccbd2016eb054b5c2adcc1b6ee0ff773032f \
         "https://github.com/api7/lua-resty-ipmatcher/archive/$LUA_RESTY_IPMATCHER_VERSION.tar.gz" "lua-resty-ipmatcher"
 
-get_src d74f86ada2329016068bc5a243268f1f555edd620b6a7d6ce89295e7d6cf18da \
+get_src 754a98de5e2912fddbeaf24830f982b4540992f1bab4a0a8796ee118e0752bda \
         "https://github.com/microsoft/mimalloc/archive/${MIMALOC_VERSION}.tar.gz" "mimalloc"
 
-get_src abc123 \
+get_src 7b0446f0b3e0b63b57883e0464d883f0ac4eab82ec7746599d37563dc6808203 \
         "https://github.com/nginx/njs/archive/${NJS_VERSION}.tar.gz" "njs"
 
-# improve compilation times
-CORES=$(($(grep -c ^processor /proc/cpuinfo) - 1))
+get_src 1d21be34f3b7b6d05a8142945e59b3a47665edcdfe0f3ee3d3dbef121f90c08c \
+        "https://github.com/google/ngx_brotli/archive/a71f9312c2deb28875acc7bacfdd5695a111aa53.tar.gz" "ngx_brotli"
+get_src aaa739962a45b508b2e783b915e6b2b57ed3b12bd4b0feac73acfb144dffa54f \
+        "https://github.com/google/brotli/archive/ed738e842d2fbdf2d6459e39267a633c4a9b2f5d.tar.gz" "ngx_brotli/deps/brotli"
+get_src f12ee3b74f76f77380863fd4f7b0eca9f72e8a5a51389b5e3315b51140a470f8 \
+        "https://github.com/ssdeep-project/ssdeep/archive/5ae3e5363281eacfac6292aebe77ebb0bde18c6e.tar.gz" "ssdeep"
+get_src f283b33d5c21130fd3a15c84a93a1abe12bd1949edaf44288b12af571b671a50 \
+        "https://github.com/owasp-modsecurity/ModSecurity/releases/download/${MODSECURITY_LIB_VERSION}/modsecurity-${MODSECURITY_LIB_VERSION}.tar.gz" "ModSecurity"
+get_src 3d678a41fd5aade34760127fef5dd64fd7a77848913fc0f70dde0cf467c94427 \
+        "https://github.com/coreruleset/coreruleset/releases/download/${OWASP_MODSECURITY_CRS_VERSION}/coreruleset-${OWASP_MODSECURITY_CRS_VERSION#v}-minimal.tar.gz" "owasp-modsecurity-crs"
+get_src 20e20bb62a76da906ca692030b57ff498eb8d69923323ab32492a623cbc930d3 \
+        "https://github.com/open-telemetry/opentelemetry-cpp-contrib/archive/8933841f0a7f8737f61404cf0a64acf6b079c8a5.tar.gz" "opentelemetry-cpp-contrib"
 
-export MAKEFLAGS=-j${CORES}
-export CTEST_BUILD_FLAGS=${MAKEFLAGS}
+CORES=${BUILD_JOBS:-$(nproc)}
+export MAKEFLAGS="-j${CORES}"
+export CTEST_BUILD_FLAGS="${MAKEFLAGS}"
 
 # Install luajit from openresty fork
 export LUAJIT_LIB=/usr/local/lib
@@ -313,20 +319,7 @@ cmake -B build -G Ninja -Wno-dev \
       cmake --build build
       cmake --install build
 
-# Git tuning
-git config --global --add core.compression -1
-
-# Get Brotli source and deps
-cd "$BUILD_PATH"
-git clone --depth=100 https://github.com/google/ngx_brotli.git
-cd ngx_brotli
-git reset --hard a71f9312c2deb28875acc7bacfdd5695a111aa53
-git submodule init
-git submodule update
-
-cd "$BUILD_PATH"
-git clone --depth=1 https://github.com/ssdeep-project/ssdeep
-cd ssdeep/
+cd "$BUILD_PATH/ssdeep"
 
 ./bootstrap
 ./configure
@@ -334,29 +327,8 @@ cd ssdeep/
 make
 make install
 
-# build modsecurity library
-cd "$BUILD_PATH"
-git clone -n https://github.com/owasp-modsecurity/ModSecurity
-cd ModSecurity/
-git checkout $MODSECURITY_LIB_VERSION
-git submodule init
-git submodule update
-
-sh build.sh
-
-# https://github.com/owasp-modsecurity/ModSecurity/issues/1909#issuecomment-465926762
-sed -i '115i LUA_CFLAGS="${LUA_CFLAGS} -DWITH_LUA_JIT_2_1"' build/lua.m4
-sed -i '117i AC_SUBST(LUA_CFLAGS)' build/lua.m4
-
-#
-# As of Alpine v3.23.0, building ModSecurity fails with:
-#
-# headers/modsecurity/collection/collection.h:x:x: error: 'int32_t' has not been declared
-# headers/modsecurity/collection/collection.h:x:x: note: 'int32_t' is defined in header '<cstdint>'; this is probably fixable by adding '#include <cstdint>'
-#
-# Sadly this has not been fixed upstream, yet, so we manually patch it here.
-#
-sed -i '24i #include <cstdint>' headers/modsecurity/collection/collection.h
+# Build the release tarball, which includes configure and its pinned submodules.
+cd "$BUILD_PATH/ModSecurity"
 
 ./configure \
   --disable-doxygen-doc \
@@ -376,49 +348,19 @@ sed -i 's|SecAuditLogType Serial|SecAuditLogType Concurrent|g' /etc/nginx/modsec
 # Concurrent logging implies the log is stored in several files
 echo "SecAuditLogStorageDir /var/log/audit/" >> /etc/nginx/modsecurity/modsecurity.conf
 
-# Download owasp modsecurity crs
-cd /etc/nginx/
-
-git clone -b $OWASP_MODSECURITY_CRS_VERSION https://github.com/coreruleset/coreruleset
-mv coreruleset owasp-modsecurity-crs
-cd owasp-modsecurity-crs
+mv "$BUILD_PATH/owasp-modsecurity-crs" /etc/nginx/
+cd /etc/nginx/owasp-modsecurity-crs
 
 mv crs-setup.conf.example crs-setup.conf
 mv rules/REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf.example rules/REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf
 mv rules/RESPONSE-999-EXCLUSION-RULES-AFTER-CRS.conf.example rules/RESPONSE-999-EXCLUSION-RULES-AFTER-CRS.conf
 cd ..
 
-# OWASP CRS v4 rules
-echo "
-Include /etc/nginx/owasp-modsecurity-crs/crs-setup.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-901-INITIALIZATION.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-905-COMMON-EXCEPTIONS.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-911-METHOD-ENFORCEMENT.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-913-SCANNER-DETECTION.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-920-PROTOCOL-ENFORCEMENT.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-921-PROTOCOL-ATTACK.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-922-MULTIPART-ATTACK.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-930-APPLICATION-ATTACK-LFI.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-931-APPLICATION-ATTACK-RFI.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-932-APPLICATION-ATTACK-RCE.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-933-APPLICATION-ATTACK-PHP.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-934-APPLICATION-ATTACK-GENERIC.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-941-APPLICATION-ATTACK-XSS.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-942-APPLICATION-ATTACK-SQLI.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-943-APPLICATION-ATTACK-SESSION-FIXATION.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-944-APPLICATION-ATTACK-JAVA.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-949-BLOCKING-EVALUATION.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/RESPONSE-950-DATA-LEAKAGES.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/RESPONSE-951-DATA-LEAKAGES-SQL.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/RESPONSE-952-DATA-LEAKAGES-JAVA.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/RESPONSE-953-DATA-LEAKAGES-PHP.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/RESPONSE-954-DATA-LEAKAGES-IIS.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/RESPONSE-955-WEB-SHELLS.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/RESPONSE-959-BLOCKING-EVALUATION.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/RESPONSE-980-CORRELATION.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/RESPONSE-999-EXCLUSION-RULES-AFTER-CRS.conf
-" > /etc/nginx/owasp-modsecurity-crs/nginx-modsecurity.conf
+# Preserve the include path consumed by controller templates and custom snippets.
+{
+  echo "Include /etc/nginx/owasp-modsecurity-crs/crs-setup.conf"
+  printf 'Include %s\n' /etc/nginx/owasp-modsecurity-crs/rules/*.conf
+} > /etc/nginx/owasp-modsecurity-crs/nginx-modsecurity.conf
 
 # build nginx
 cd "$BUILD_PATH/nginx-$NGINX_VERSION"
@@ -518,19 +460,12 @@ make
 make modules
 make install
 
-# Check for recent changes: https://github.com/open-telemetry/opentelemetry-cpp-contrib/compare/8933841f0a7f8737f61404cf0a64acf6b079c8a5...main
-export OPENTELEMETRY_CONTRIB_COMMIT=8933841f0a7f8737f61404cf0a64acf6b079c8a5
-cd "$BUILD_PATH"
-
-git clone https://github.com/open-telemetry/opentelemetry-cpp-contrib.git opentelemetry-cpp-contrib-${OPENTELEMETRY_CONTRIB_COMMIT}
-
-cd ${BUILD_PATH}/opentelemetry-cpp-contrib-${OPENTELEMETRY_CONTRIB_COMMIT}
-git reset --hard ${OPENTELEMETRY_CONTRIB_COMMIT}
-
 export OTEL_TEMP_INSTALL=/tmp/otel
-mkdir -p ${OTEL_TEMP_INSTALL}
+mkdir -p "$OTEL_TEMP_INSTALL"
 
-cd ${BUILD_PATH}/opentelemetry-cpp-contrib-${OPENTELEMETRY_CONTRIB_COMMIT}/instrumentation/nginx
+cd "$BUILD_PATH/opentelemetry-cpp-contrib/instrumentation/nginx"
+# Use the headers and generated configuration of the NGINX binary loaded at runtime.
+cp /opentelemetry-nginx.cmake nginx.cmake
 mkdir -p build
 cd build
 cmake -DCMAKE_BUILD_TYPE=Release \
@@ -538,7 +473,7 @@ cmake -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_CXX_STANDARD=17 \
         -DCMAKE_INSTALL_PREFIX=${OTEL_TEMP_INSTALL} \
         -DBUILD_SHARED_LIBS=ON \
-        -DNGINX_VERSION=${NGINX_VERSION} \
+        -DNGINX_DIR="$BUILD_PATH/nginx-$NGINX_VERSION" \
         ..
 cmake --build . -j ${CORES} --target install
 
@@ -619,9 +554,6 @@ for dir in "${writeDirs[@]}"; do
   mkdir -p ${dir};
   chown -R www-data:www-data ${dir};
 done
-
-rm -rf /etc/nginx/owasp-modsecurity-crs/.git
-rm -rf /etc/nginx/owasp-modsecurity-crs/tests
 
 # remove .a files
 find /usr/local -name "*.a" -print | xargs /bin/rm

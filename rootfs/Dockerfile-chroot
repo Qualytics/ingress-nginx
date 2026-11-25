@@ -13,6 +13,14 @@
 # limitations under the License
 
 ARG BASE_IMAGE
+ARG BINARY_SOURCE=local-binaries
+ARG ALPINE_IMAGE=docker.io/library/alpine:3.23.8@sha256:469c9ea410b9215eaee7976ba6c0639039b444be8e5d638f7abbada189971eb2
+
+FROM scratch AS local-binaries
+ARG TARGETARCH
+COPY bin/${TARGETARCH}/ /
+
+FROM ${BINARY_SOURCE} AS controller-binaries
 
 FROM ${BASE_IMAGE} AS chroot
 
@@ -23,7 +31,7 @@ RUN apk update \
   && apk upgrade \
   && /chroot.sh
 
-FROM alpine:3.23.3
+FROM ${ALPINE_IMAGE}
 
 ARG TARGETARCH
 ARG VERSION
@@ -31,9 +39,9 @@ ARG COMMIT_SHA
 ARG BUILD_ID=UNSET
 
 LABEL org.opencontainers.image.title="NGINX Ingress Controller for Kubernetes"
-LABEL org.opencontainers.image.documentation="https://kubernetes.github.io/ingress-nginx/"
-LABEL org.opencontainers.image.source="https://github.com/kubernetes/ingress-nginx"
-LABEL org.opencontainers.image.vendor="The Kubernetes Authors"
+LABEL org.opencontainers.image.documentation="https://github.com/Qualytics/ingress-nginx"
+LABEL org.opencontainers.image.source="https://github.com/Qualytics/ingress-nginx"
+LABEL org.opencontainers.image.vendor="Qualytics"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 LABEL org.opencontainers.image.version="${VERSION}"
 LABEL org.opencontainers.image.revision="${COMMIT_SHA}"
@@ -63,9 +71,7 @@ COPY --from=chroot /chroot /chroot
 
 COPY --chown=www-data:www-data etc /chroot/etc
 
-COPY --chown=www-data:www-data bin/${TARGETARCH}/dbg /
-COPY --chown=www-data:www-data bin/${TARGETARCH}/nginx-ingress-controller /
-COPY --chown=www-data:www-data bin/${TARGETARCH}/wait-shutdown /
+COPY --from=controller-binaries --chown=www-data:www-data /dbg /nginx-ingress-controller /wait-shutdown /
 COPY --chown=www-data:www-data nginx-chroot-wrapper.sh /usr/bin/nginx
 
 WORKDIR /chroot/etc/nginx
@@ -83,7 +89,7 @@ RUN bash -xeu -c ' \
   # LD_LIBRARY_PATH does not work so below is needed for  opentelemetry/other modules
   # Put libs of newer modules under `/modules_mount/<other>/lib` and add that path below
   # Could get complicated arch specific paths become a need
-  && echo "/lib:/usr/lib:/usr/local/lib:/modules_mount/etc/nginx/modules/otel" > /chroot/etc/ld-musl-x86_64.path
+  && echo "/lib:/usr/lib:/usr/local/lib:/modules_mount/etc/nginx/modules/otel" > "/chroot/etc/ld-musl-$(uname -m).path"
 
 RUN apk add --no-cache libcap \
   && setcap    cap_sys_chroot,cap_net_bind_service=+ep /nginx-ingress-controller \

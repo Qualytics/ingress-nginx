@@ -1,0 +1,193 @@
+name: Qualytics controller
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the qualified TAG version to Docker Hub
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: docker.io/qualyticsai/ingress-nginx-controller
+
+jobs:
+  unit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Run the upstream Go unit suite
+        run: make ARCH=amd64 test
+
+  qualify:
+    name: Qualify ${{ matrix.variant }} linux/${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+        variant: [controller, controller-chroot]
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+            kind_sha: aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d
+            yq_sha: 129534601871538efe0ba4c5e62a34fb1d5f469bcb975c4fddeb467d82974973
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            kind_sha: 20022bee6cfcd5086cb7234d218e3454e6090022f2a8f55d1fa7fcf42c3867a2
+            yq_sha: 89f69310b61b68d1245065a1241d1fc843f7a36cd6103ffd77ad987613bd1b67
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: Qualytics/qualytics-self-hosted
+          ref: afc232088aa5a98fbf30635293d2c5a42c9d3c10 # self-hosted 2026.11.24
+          path: self-hosted-chart
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          version: v0.39.1
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: v4.3.2
+      - uses: azure/setup-kubectl@bda439f5f36b99b262ebdcd3613869bddb064c8e # v5.2.0
+        with:
+          version: v1.35.3
+      - name: Install test tools
+        env:
+          ARCH: ${{ matrix.arch }}
+          KIND_SHA: ${{ matrix.kind_sha }}
+          YQ_SHA: ${{ matrix.yq_sha }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y skopeo
+          cd "$RUNNER_TEMP"
+          curl --fail --location --retry 3 "https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-linux-$ARCH" -o kind
+          curl --fail --location --retry 3 "https://github.com/mikefarah/yq/releases/download/v4.54.3/yq_linux_$ARCH" -o yq
+          printf '%s  %s\n' "$KIND_SHA" kind "$YQ_SHA" yq | sha256sum --check
+          sudo install -m 0755 kind yq /usr/local/bin/
+      - name: Build the release candidate from source
+        env:
+          ARCH: ${{ matrix.arch }}
+          COMMIT_SHA: ${{ github.sha }}
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          export VERSION="$(cat TAG)"
+          docker buildx bake "$VARIANT" --set "*.platform=linux/$ARCH" \
+            --set "$VARIANT.output=type=oci,dest=$VARIANT-$ARCH.tar" \
+            --sbom=true --provenance=mode=max
+          mv "$VARIANT-$ARCH.tar" "$RUNNER_TEMP/"
+          skopeo --override-os linux --override-arch "$ARCH" copy \
+            "oci-archive:$RUNNER_TEMP/$VARIANT-$ARCH.tar" "docker-daemon:qualytics-$VARIANT:qualification"
+      - name: Scan the candidate image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.76.2
+          image-ref: qualytics-${{ matrix.variant }}:qualification
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+          ignore-unfixed: false
+        env:
+          TRIVY_IMAGE_SRC: docker
+      - name: Run Qualytics chart qualification
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          options=()
+          if [[ "$VARIANT" == controller-chroot ]]; then options+=(--chroot); fi
+          bash hack/qualytics/chart-smoke.sh "qualytics-$VARIANT:qualification" self-hosted-chart "${options[@]}"
+      - name: Retain the exact qualified image and attestations for release
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'Qualytics/ingress-nginx'
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: ${{ matrix.variant }}-${{ matrix.arch }}
+          path: ${{ runner.temp }}/${{ matrix.variant }}-${{ matrix.arch }}.tar
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
+
+  sign:
+    needs: [unit, qualify]
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'Qualytics/ingress-nginx'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: controller-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/qualified
+      - uses: sigstore/cosign-installer@881c63bd87e38389154debd8331404ce7ca8a3ab # v4.1.4
+        with:
+          cosign-release: v3.1.5
+      - name: Sign the exact multiarchitecture indices
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y skopeo
+          bash build/package-controller.sh "$RUNNER_TEMP/qualified" "$RUNNER_TEMP/images"
+          mkdir "$RUNNER_TEMP/signed"
+          for variant in controller controller-chroot; do
+            cp "$RUNNER_TEMP/images/$variant.index.json" "$RUNNER_TEMP/signed/"
+            cosign sign-blob --yes --bundle "$RUNNER_TEMP/signed/$variant.sigstore.json" "$RUNNER_TEMP/signed/$variant.index.json"
+          done
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: signed-release
+          path: ${{ runner.temp }}/signed
+          if-no-files-found: error
+
+  publish:
+    needs: sign
+    if: github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == 'refs/heads/main' && github.repository == 'Qualytics/ingress-nginx'
+    runs-on: ubuntu-24.04
+    environment: dockerhub-production
+    concurrency:
+      group: qualytics-controller-dockerhub-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: controller-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/qualified
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: signed-release
+          path: ${{ runner.temp }}/signed
+      - uses: sigstore/cosign-installer@881c63bd87e38389154debd8331404ce7ca8a3ab # v4.1.4
+        with:
+          cosign-release: v3.1.5
+      - uses: oras-project/setup-oras@ac735097e22fe643015b0d19645f7c9a69942128 # v2.0.4
+        with:
+          version: 1.4.0
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          username: qualyticsai
+        env:
+          DOCKERHUB_OIDC_CONNECTIONID: ${{ vars.DOCKERHUB_OIDC_CONNECTIONID }}
+      - name: Publish the signed version
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y skopeo
+          bash build/publish-controller.sh "$RUNNER_TEMP/qualified" "$RUNNER_TEMP/signed"
