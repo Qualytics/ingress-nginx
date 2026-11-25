@@ -58,6 +58,11 @@ ifneq ($(PLATFORM),)
 	PLATFORM_FLAG="--platform"
 endif
 
+ifdef REGISTRY
+IMAGE ?= $(REGISTRY)/controller
+else
+IMAGE ?= docker.io/qualyticsai/ingress-nginx-controller
+endif
 REGISTRY ?= us-central1-docker.pkg.dev/k8s-staging-images/ingress-nginx
 
 BASE_IMAGE ?= $(shell cat NGINX_BASE)
@@ -68,33 +73,18 @@ help:  ## Display this help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z0-9_-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
 .PHONY: image
-image: clean-image ## Build image for a particular arch.
-	echo "Building docker image ($(ARCH))..."
-	docker build \
-		${PLATFORM_FLAG} ${PLATFORM} \
-		--no-cache \
-		--build-arg BASE_IMAGE="$(BASE_IMAGE)" \
-		--build-arg VERSION="$(TAG)" \
-		--build-arg TARGETARCH="$(ARCH)" \
-		--build-arg COMMIT_SHA="$(COMMIT_SHA)" \
-		--build-arg BUILD_ID="$(BUILD_ID)" \
-		-t $(REGISTRY)/controller:$(TAG) rootfs
+image: ## Build the Qualytics controller and its source-built base for a particular arch.
+	VERSION="$(TAG)" IMAGE="$(IMAGE)" COMMIT_SHA="$(COMMIT_SHA)" \
+		docker buildx bake --set '*.platform=linux/$(ARCH)' --load controller
 
 .PHONY: gosec
 gosec:
 	docker run --rm -it -w /source/ -v "$(pwd)"/:/source securego/gosec:2.11.0 -exclude=G109,G601,G104,G204,G304,G306,G307 -tests=false -exclude-dir=test -exclude-dir=images/  -exclude-dir=docs/ /source/...
 
 .PHONY: image-chroot
-image-chroot: clean-chroot-image ## Build image for a particular arch.
-	echo "Building docker image ($(ARCH))..."
-	docker build \
-		--no-cache \
-		--build-arg BASE_IMAGE="$(BASE_IMAGE)" \
-		--build-arg VERSION="$(TAG)" \
-		--build-arg TARGETARCH="$(ARCH)" \
-		--build-arg COMMIT_SHA="$(COMMIT_SHA)" \
-		--build-arg BUILD_ID="$(BUILD_ID)" \
-		-t $(REGISTRY)/controller-chroot:$(TAG) rootfs -f rootfs/Dockerfile-chroot
+image-chroot: ## Build the chroot variant from the same source checkout.
+	VERSION="$(TAG)" IMAGE="$(IMAGE)" COMMIT_SHA="$(COMMIT_SHA)" \
+		docker buildx bake --set '*.platform=linux/$(ARCH)' --load controller-chroot
 
 .PHONY: clean-image
 clean-image: ## Removes local image
@@ -249,38 +239,10 @@ BUILDER ?= ingress-nginx
 PLATFORMS ?= amd64 arm arm64
 BUILDX_PLATFORMS ?= linux/amd64,linux/arm,linux/arm64
 
-.PHONY: release # Build a multi-arch docker image
-release: builder clean
-	echo "Building binaries..."
-	$(foreach PLATFORM,$(PLATFORMS), echo -n "$(PLATFORM)..."; ARCH=$(PLATFORM) make build;)
-
-	echo "Building and pushing ingress-nginx image...$(BUILDX_PLATFORMS)"
-
-	docker buildx build \
-		--no-cache \
-		$(MAC_DOCKER_FLAGS) \
-		--push \
-		--pull \
-		--progress plain \
-		--platform $(BUILDX_PLATFORMS) \
-		--build-arg BASE_IMAGE="$(BASE_IMAGE)" \
-		--build-arg VERSION="$(TAG)" \
-		--build-arg COMMIT_SHA="$(COMMIT_SHA)" \
-		--build-arg BUILD_ID="$(BUILD_ID)" \
-		-t $(REGISTRY)/controller:$(TAG) rootfs
-
-	docker buildx build \
-		--no-cache \
-		$(MAC_DOCKER_FLAGS) \
-		--push \
-		--pull \
-		--progress plain \
-		--platform $(BUILDX_PLATFORMS)  \
-		--build-arg BASE_IMAGE="$(BASE_IMAGE)" \
-		--build-arg VERSION="$(TAG)" \
-		--build-arg COMMIT_SHA="$(COMMIT_SHA)" \
-		--build-arg BUILD_ID="$(BUILD_ID)" \
-		-t $(REGISTRY)/controller-chroot:$(TAG) rootfs -f rootfs/Dockerfile-chroot
+.PHONY: release
+release:
+	@echo "Dispatch the Qualytics controller workflow on main with publish enabled to release a qualified image." >&2
+	@exit 1
 
 .PHONY: build-docs
 build-docs:
