@@ -1,66 +1,111 @@
-name: Chart
+name: Qualytics Helm chart
 
 on:
-  push:
-    branches:
-      - main
-      - release-*
+  pull_request:
     paths:
-      - charts/ingress-nginx/Chart.yaml
-  
+      - charts/ingress-nginx/**
+      - .github/workflows/chart.yaml
+  push:
+    branches: [main]
+    paths:
+      - charts/ingress-nginx/**
+      - .github/workflows/chart.yaml
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  release:
-    name: Release
-    runs-on: ubuntu-latest
+  validate:
+    runs-on: ubuntu-24.04
+    outputs:
+      ready: ${{ steps.images.outputs.ready }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: v4.3.2
+      - name: Test chart
+        run: |
+          helm lint --strict charts/ingress-nginx
+          helm plugin install https://github.com/helm-unittest/helm-unittest --version v1.0.0 --verify=false
+          helm unittest charts/ingress-nginx --file 'tests/**/*_test.yaml'
+      - name: Verify published controller image pins
+        id: images
+        working-directory: charts/ingress-nginx
+        run: |
+          set -euo pipefail
+          tag=$(yq -r '.controller.image.tag' values.yaml)
+          [[ "$tag" == "v$(yq -r '.appVersion' Chart.yaml)" ]]
+          digest=$(yq -r '.controller.image.digest' values.yaml)
+          chroot_digest=$(yq -r '.controller.image.digestChroot' values.yaml)
+          if [[ -z "$digest" && -z "$chroot_digest" ]]; then
+            echo "::notice::Chart publication is pending both Docker Hub image digests."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ && "$chroot_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          sudo apt-get update -qq
+          sudo apt-get install -y skopeo
+          for chroot in false true; do
+            repo=docker.io/qualyticsai/ingress-nginx-controller
+            pin=$digest
+            if [[ "$chroot" == true ]]; then
+              repo+=-chroot
+              pin=$chroot_digest
+            fi
+            rendered=$(helm template validate . --set "controller.image.chroot=$chroot" --show-only templates/controller-deployment.yaml |
+              yq -r '.spec.template.spec.containers[0].image')
+            [[ "$rendered" == "$repo:$tag@$pin" ]]
+            skopeo inspect --raw "docker://$repo:$tag" > "$RUNNER_TEMP/index.json"
+            [[ "$(skopeo manifest-digest "$RUNNER_TEMP/index.json")" == "$pin" ]]
+            jq -e '([.manifests[].platform | select(.os == "linux") | .architecture] | unique) == ["amd64","arm64"]' "$RUNNER_TEMP/index.json"
+          done
+          echo "ready=true" >> "$GITHUB_OUTPUT"
 
+  publish:
+    needs: validate
+    if: needs.validate.outputs.ready == 'true' && github.repository == 'Qualytics/ingress-nginx' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: qualytics-ingress-nginx-helm-pages
+      cancel-in-progress: false
     permissions:
       contents: write
-
+      pages: write
     steps:
-      - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-        with:
-          python-version: 3.x
-
-      - name: Set up Helm
-        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
-        with:
-          version: v4.1.3
-
-      - name: Set up Helm Chart Testing
-        uses: helm/chart-testing-action@6ec842c01de15ebb84c8627d2744a0c2f2755c9f
-
-      - name: Set up Artifact Hub
-        run: |
-          curl --fail --location https://github.com/artifacthub/hub/releases/download/v1.20.0/ah_1.20.0_linux_amd64.tar.gz --output /tmp/ah.tar.gz
-          echo "9027626f19ff9f3ac668f222917130ac885e289e922e1428bfd2e7f066324e31  /tmp/ah.tar.gz" | shasum --check
-          sudo tar --extract --file /tmp/ah.tar.gz --directory /usr/local/bin ah
-
-      - name: Set up Git
-        run: |
-          git config --global user.name "${GITHUB_ACTOR}"
-          git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
-
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
-
-      - name: Lint chart
-        run: |
-          ct lint --config .ct.yaml
-          ah lint --path charts/ingress-nginx
-
-      - name: Release chart
-        uses: helm/chart-releaser-action@cae68fefc6b5f367a0275617c9f83181ba54714f # v1.7.0
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: v4.3.2
+      - uses: helm/chart-releaser-action@cae68fefc6b5f367a0275617c9f83181ba54714f # v1.7.0
+        with:
+          install_only: true
+      - name: Release package and update the GitHub Pages index
         env:
           CR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CR_RELEASE_NAME_TEMPLATE: helm-chart-{{ .Version }}
-          CR_SKIP_EXISTING: true
-        with:
-          charts_dir: charts
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          mkdir -p .cr-index
+          cr package charts/ingress-nginx
+          cr upload -o "$GITHUB_REPOSITORY_OWNER" -r "${GITHUB_REPOSITORY#*/}" -c "$GITHUB_SHA" --skip-existing --make-release-latest=false
+          cr index -o "$GITHUB_REPOSITORY_OWNER" -r "${GITHUB_REPOSITORY#*/}" --pages-branch gh-pages --push
+      - name: Publish the branch index and verify the public package
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api --method POST "repos/$GITHUB_REPOSITORY/pages/builds" --silent
+          chart_version=$(yq -r '.version' charts/ingress-nginx/Chart.yaml)
+          for attempt in {1..30}; do
+            if helm pull --repo https://qualytics.github.io/ingress-nginx ingress-nginx --version "$chart_version" --destination "$RUNNER_TEMP"; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::Public Helm repository did not serve ingress-nginx $chart_version"
+          exit 1
