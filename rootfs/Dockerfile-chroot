@@ -27,9 +27,11 @@ FROM ${BASE_IMAGE} AS chroot
 # This intermediary image will be used only to copy all the required files to the chroot
 # TODO: Simplify in a future to a single Dockerfile
 COPY chroot.sh /chroot.sh
-RUN apk update \
+RUN --mount=type=bind,from=qualytics-libxml2,target=/packages/libxml2 \
+  apk update \
   && apk upgrade \
-  && /chroot.sh
+  && /chroot.sh \
+  && sh /packages/libxml2/install.sh /chroot
 
 FROM ${ALPINE_IMAGE}
 

@@ -15,7 +15,8 @@ ARG ALPINE_IMAGE=docker.io/library/alpine:3.23.8@sha256:469c9ea410b9215eaee7976b
 FROM ${ALPINE_IMAGE} AS builder
 ARG BUILD_JOBS
 
-COPY . /
+COPY build.sh opentelemetry-nginx.cmake /
+COPY patches /patches
 
 RUN apk update \
   && apk upgrade \
@@ -35,7 +36,8 @@ COPY --from=builder /usr/lib/libopentelemetry* /usr/local/lib
 COPY --from=builder /opt /opt
 COPY --from=builder /etc/nginx /etc/nginx
 
-RUN apk update \
+RUN --mount=type=bind,source=libxml2,target=/packages/libxml2 \
+  apk update \
   && apk upgrade \
   && apk add -U --no-cache \
   bash \
@@ -47,7 +49,6 @@ RUN apk update \
   patch \
   yajl \
   lmdb \
-  libxml2 \
   libmaxminddb \
   yaml-cpp \
   dumb-init \
@@ -56,6 +57,7 @@ RUN apk update \
   libprotobuf \
   abseil-cpp-crc-cpu-detect \
   abseil-cpp-vlog-config-internal \
+  && sh /packages/libxml2/install.sh / \
   && ln -s /usr/local/nginx/sbin/nginx /sbin/nginx \
   && adduser -S -D -H -u 101 -h /usr/local/nginx \
   -s /sbin/nologin -G www-data -g www-data www-data \

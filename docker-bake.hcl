@@ -41,5 +41,8 @@ target "controller" {
 target "controller-chroot" {
   inherits   = ["controller"]
   dockerfile = "Dockerfile-chroot"
+  contexts = {
+    qualytics-libxml2 = "./images/nginx/rootfs/libxml2"
+  }
   tags       = ["${IMAGE}-chroot:${VERSION}"]
 }

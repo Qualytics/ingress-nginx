@@ -23,6 +23,10 @@ for variant in controller controller-chroot; do
       any($types[]; . == "https://spdx.dev/Document") and
       any($types[]; startswith("https://slsa.dev/provenance/"))
     ' "$layout/blobs/sha256/${attestation#sha256:}" >/dev/null
+    sbom=$(jq -er '.layers[] | select(.annotations["in-toto.io/predicate-type"] == "https://spdx.dev/Document") | .digest' \
+      "$layout/blobs/sha256/${attestation#sha256:}")
+    jq -e '[.predicate.packages[] | select(.name == "libxml2") | .versionInfo] | unique == ["2.13.9-r4"]' \
+      "$layout/blobs/sha256/${sbom#sha256:}" >/dev/null
   done
   index="$output/$variant.index.json"
   jq -cs --arg revision "$revision" --arg version "$version" --arg image "docker.io/qualyticsai/ingress-nginx-$variant" '
