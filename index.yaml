@@ -1,2 +1,30 @@
 apiVersion: v1
-entries: {}
+entries:
+  ingress-nginx:
+  - annotations:
+      artifacthub.io/changes: |
+        - Use the Qualytics ingress-nginx controller and chroot images.
+        - Include Alpine's libxml2 security backport in both controller images.
+      artifacthub.io/prerelease: "false"
+    apiVersion: v2
+    appVersion: 1.30.8-qualytics.2
+    created: "2026-11-26T03:50:26.065735219Z"
+    description: Qualytics distribution of the Kubernetes ingress-nginx controller
+    digest: cf939a73357e8bd39127e77c06b4d266ed05ac604d59ede797cdf91c4ad35cf8
+    home: https://github.com/Qualytics/ingress-nginx
+    icon: https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Nginx_logo.svg/500px-Nginx_logo.svg.png
+    keywords:
+    - ingress
+    - nginx
+    kubeVersion: '>=1.21.0-0'
+    maintainers:
+    - name: Qualytics
+      url: https://github.com/Qualytics
+    name: ingress-nginx
+    sources:
+    - https://github.com/Qualytics/ingress-nginx
+    - https://github.com/kubernetes/ingress-nginx
+    urls:
+    - https://github.com/Qualytics/ingress-nginx/releases/download/ingress-nginx-4.15.2/ingress-nginx-4.15.2.tgz
+    version: 4.15.2
+generated: "2026-11-26T03:50:26.065738512Z"
