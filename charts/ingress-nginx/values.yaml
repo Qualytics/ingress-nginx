@@ -30,9 +30,9 @@ controller:
     ## for backwards compatibility consider setting the full image url via the repository value below
     ## use *either* current default registry/image or repository format or installing chart by providing the values.yaml will fail
     ## repository:
-    tag: "v1.30.8-qualytics.1"
-    digest: sha256:061bbab1999054242764d5476a195b383c4357206cceebe4a505160b3401da16
-    digestChroot: sha256:724ea15cfb4b36c89822274d339c9b3046e767c8d26f4fa4d2f5d98fa76db839
+    tag: "v1.30.8-qualytics.2"
+    digest: sha256:c0a316e9fde30ccacf540d2597befebe00fd379217b0e7110797af955a1f4464
+    digestChroot: sha256:f05bdc471bb71cda00b8a1cdb21b45b69e509ed260b97cbdc391740d1780b7e8
     pullPolicy: IfNotPresent
     runAsNonRoot: true
     # -- This value must not be changed using the official image.

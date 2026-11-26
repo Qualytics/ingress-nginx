@@ -1,9 +1,10 @@
 annotations:
   artifacthub.io/changes: |
     - Use the Qualytics ingress-nginx controller and chroot images.
+    - Include Alpine's libxml2 security backport in both controller images.
   artifacthub.io/prerelease: "false"
 apiVersion: v2
-appVersion: 1.30.8-qualytics.1
+appVersion: 1.30.8-qualytics.2
 description: Qualytics distribution of the Kubernetes ingress-nginx controller
 home: https://github.com/Qualytics/ingress-nginx
 icon: https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Nginx_logo.svg/500px-Nginx_logo.svg.png
