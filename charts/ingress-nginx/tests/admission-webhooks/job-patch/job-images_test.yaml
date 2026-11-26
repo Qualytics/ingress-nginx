@@ -1,0 +1,28 @@
+suite: Admission Webhooks > Patch Job > Images
+templates:
+  - admission-webhooks/job-patch/job-createSecret.yaml
+  - admission-webhooks/job-patch/job-patchWebhook.yaml
+
+tests:
+  - it: pulls both webhook jobs from the upstream registry by default
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: '^registry\.k8s\.io/ingress-nginx/kube-webhook-certgen:[^@]+@sha256:[0-9a-f]{64}$'
+
+  - it: applies a global registry mirror to both webhook jobs
+    set:
+      global.image.registry: mirror.example
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: '^mirror\.example/ingress-nginx/kube-webhook-certgen:[^@]+@sha256:[0-9a-f]{64}$'
+
+  - it: gives a fully qualified webhook repository precedence over the global mirror
+    set:
+      global.image.registry: mirror.example
+      controller.admissionWebhooks.patch.image.repository: private.example/certs/generator
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: '^private\.example/certs/generator:[^@]+@sha256:[0-9a-f]{64}$'

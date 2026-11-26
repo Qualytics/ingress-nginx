@@ -1,5 +1,5 @@
 {{ template "chart.header" . }}
-[ingress-nginx](https://github.com/kubernetes/ingress-nginx) Ingress controller for Kubernetes using NGINX as a reverse proxy and load balancer
+The Qualytics distribution of the Kubernetes ingress-nginx controller includes security updates from the open-source community.
 
 {{ template "chart.versionBadge" . }}{{ template "chart.typeBadge" . }}{{ template "chart.appVersionBadge" . }}
 
@@ -12,19 +12,19 @@ This chart bootstraps an ingress-nginx deployment on a [Kubernetes](http://kuber
 ## Get Repo Info
 
 ```console
-helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm repo add qualytics-ingress https://qualytics.github.io/ingress-nginx
 helm repo update
 ```
 
 ## Install Chart
 
-**Important:** only helm3 is supported
+The controller and chroot images are private Docker Hub repositories. Use credentials with pull access to both `qualyticsai/ingress-nginx-controller` and `qualyticsai/ingress-nginx-controller-chroot`. When your credentials are stored in a Kubernetes Secret, create it in the release namespace and pass its name to Helm.
 
 ```console
-helm install [RELEASE_NAME] ingress-nginx/ingress-nginx
+helm install [RELEASE_NAME] qualytics-ingress/ingress-nginx --namespace [NAMESPACE] --set 'imagePullSecrets[0].name=regcred'
 ```
 
-The command deploys ingress-nginx on the Kubernetes cluster in the default configuration.
+Replace `regcred` with your registry Secret name. Omit the flag if the cluster already authenticates pulls through its ServiceAccount or nodes. A parent chart can supply `global.imagePullSecrets`. An explicit `imagePullSecrets` list takes precedence, including an empty list.
 
 _See [configuration](#configuration) below._
 
@@ -43,10 +43,16 @@ _See [helm uninstall](https://helm.sh/docs/helm/helm_uninstall/) for command doc
 ## Upgrading Chart
 
 ```console
-helm upgrade [RELEASE_NAME] [CHART] --install
+helm upgrade [RELEASE_NAME] qualytics-ingress/ingress-nginx --namespace [NAMESPACE] --values [VALUES_FILE]
 ```
 
 _See [helm upgrade](https://helm.sh/docs/helm/helm_upgrade/) for command documentation._
+
+For an existing upstream chart 4.15.1 installation, use its release name, namespace and operator-supplied values. Review any explicit controller image, tag and digest overrides so the upgrade selects the intended image. The validating webhook jobs and optional default backend use their existing upstream repositories.
+
+For a private mirror, set `global.image.registry` to mirror all images, or set `controller.image.registry` and `controller.image.image` for the controller alone. `controller.image.repository` accepts a fully qualified repository. With that override and `controller.image.chroot: true`, supply the complete chroot repository name. Preserve the published index digests when mirroring.
+
+The chart package includes both signed image indexes and their Sigstore bundles under `provenance/<controller tag>/`. Chart CI verifies the signing workflow, each pinned digest, image name, version and supported architectures.
 
 ### Migrating from stable/nginx-ingress
 
@@ -66,7 +72,7 @@ Note that there are some different and upgraded configurations between the two c
 See [Customizing the Chart Before Installing](https://helm.sh/docs/intro/using_helm/#customizing-the-chart-before-installing). To see all configurable options with detailed comments, visit the chart's [values.yaml](./values.yaml), or run these configuration commands:
 
 ```console
-helm show values ingress-nginx/ingress-nginx
+helm show values qualytics-ingress/ingress-nginx
 ```
 
 ### PodDisruptionBudget

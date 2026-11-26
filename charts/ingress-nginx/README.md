@@ -1,8 +1,8 @@
 # ingress-nginx
 
-[ingress-nginx](https://github.com/kubernetes/ingress-nginx) Ingress controller for Kubernetes using NGINX as a reverse proxy and load balancer
+The Qualytics distribution of the Kubernetes ingress-nginx controller includes security updates from the open-source community.
 
-![Version: 4.15.1](https://img.shields.io/badge/Version-4.15.1-informational?style=flat-square) ![AppVersion: 1.15.1](https://img.shields.io/badge/AppVersion-1.15.1-informational?style=flat-square)
+![Version: 4.15.2](https://img.shields.io/badge/Version-4.15.2-informational?style=flat-square) ![AppVersion: 1.30.8-qualytics.2](https://img.shields.io/badge/AppVersion-1.30.8--qualytics.2-informational?style=flat-square)
 
 To use, add `ingressClassName: nginx` spec field or the `kubernetes.io/ingress.class: nginx` annotation to your Ingress resources.
 
@@ -15,19 +15,19 @@ Kubernetes: `>=1.21.0-0`
 ## Get Repo Info
 
 ```console
-helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm repo add qualytics-ingress https://qualytics.github.io/ingress-nginx
 helm repo update
 ```
 
 ## Install Chart
 
-**Important:** only helm3 is supported
+The controller and chroot images are private Docker Hub repositories. Use credentials with pull access to both `qualyticsai/ingress-nginx-controller` and `qualyticsai/ingress-nginx-controller-chroot`. When your credentials are stored in a Kubernetes Secret, create it in the release namespace and pass its name to Helm.
 
 ```console
-helm install [RELEASE_NAME] ingress-nginx/ingress-nginx
+helm install [RELEASE_NAME] qualytics-ingress/ingress-nginx --namespace [NAMESPACE] --set 'imagePullSecrets[0].name=regcred'
 ```
 
-The command deploys ingress-nginx on the Kubernetes cluster in the default configuration.
+Replace `regcred` with your registry Secret name. Omit the flag if the cluster already authenticates pulls through its ServiceAccount or nodes. A parent chart can supply `global.imagePullSecrets`. An explicit `imagePullSecrets` list takes precedence, including an empty list.
 
 _See [configuration](#configuration) below._
 
@@ -46,10 +46,16 @@ _See [helm uninstall](https://helm.sh/docs/helm/helm_uninstall/) for command doc
 ## Upgrading Chart
 
 ```console
-helm upgrade [RELEASE_NAME] [CHART] --install
+helm upgrade [RELEASE_NAME] qualytics-ingress/ingress-nginx --namespace [NAMESPACE] --values [VALUES_FILE]
 ```
 
 _See [helm upgrade](https://helm.sh/docs/helm/helm_upgrade/) for command documentation._
+
+For an existing upstream chart 4.15.1 installation, use its release name, namespace and operator-supplied values. Review any explicit controller image, tag and digest overrides so the upgrade selects the intended image. The validating webhook jobs and optional default backend use their existing upstream repositories.
+
+For a private mirror, set `global.image.registry` to mirror all images, or set `controller.image.registry` and `controller.image.image` for the controller alone. `controller.image.repository` accepts a fully qualified repository. With that override and `controller.image.chroot: true`, supply the complete chroot repository name. Preserve the published index digests when mirroring.
+
+The chart package includes both signed image indexes and their Sigstore bundles under `provenance/<controller tag>/`. Chart CI verifies the signing workflow, each pinned digest, image name, version and supported architectures.
 
 ### Migrating from stable/nginx-ingress
 
@@ -69,7 +75,7 @@ Note that there are some different and upgraded configurations between the two c
 See [Customizing the Chart Before Installing](https://helm.sh/docs/intro/using_helm/#customizing-the-chart-before-installing). To see all configurable options with detailed comments, visit the chart's [values.yaml](./values.yaml), or run these configuration commands:
 
 ```console
-helm show values ingress-nginx/ingress-nginx
+helm show values qualytics-ingress/ingress-nginx
 ```
 
 ### PodDisruptionBudget
@@ -349,16 +355,16 @@ metadata:
 | controller.hostname | object | `{}` | Optionally customize the pod hostname. |
 | controller.image.allowPrivilegeEscalation | bool | `false` |  |
 | controller.image.chroot | bool | `false` |  |
-| controller.image.digest | string | `"sha256:594ceea76b01c592858f803f9ff4d2cb40542cae2060410b2c95f75907d659e1"` |  |
-| controller.image.digestChroot | string | `"sha256:af31d00c9d82c612896b380a9003bd36843b7647b98e4588251c66325317bc72"` |  |
-| controller.image.image | string | `"ingress-nginx/controller"` |  |
+| controller.image.digest | string | `"sha256:c0a316e9fde30ccacf540d2597befebe00fd379217b0e7110797af955a1f4464"` |  |
+| controller.image.digestChroot | string | `"sha256:f05bdc471bb71cda00b8a1cdb21b45b69e509ed260b97cbdc391740d1780b7e8"` |  |
+| controller.image.image | string | `"qualyticsai/ingress-nginx-controller"` |  |
 | controller.image.pullPolicy | string | `"IfNotPresent"` |  |
 | controller.image.readOnlyRootFilesystem | bool | `false` |  |
 | controller.image.runAsGroup | int | `82` | This value must not be changed using the official image. uid=101(www-data) gid=82(www-data) groups=82(www-data) |
 | controller.image.runAsNonRoot | bool | `true` |  |
 | controller.image.runAsUser | int | `101` | This value must not be changed using the official image. uid=101(www-data) gid=82(www-data) groups=82(www-data) |
 | controller.image.seccompProfile.type | string | `"RuntimeDefault"` |  |
-| controller.image.tag | string | `"v1.15.1"` |  |
+| controller.image.tag | string | `"v1.30.8-qualytics.2"` |  |
 | controller.ingressClass | string | `"nginx"` | For backwards compatibility with ingress.class annotation, use ingressClass. Algorithm is as follows, first ingressClassName is considered, if not present, controller looks for ingress.class annotation |
 | controller.ingressClassByName | bool | `false` | Process IngressClass per name (additionally as per spec.controller). |
 | controller.ingressClassResource | object | `{"aliases":[],"annotations":{},"controllerValue":"k8s.io/ingress-nginx","default":false,"enabled":true,"name":"nginx","parameters":{}}` | This section refers to the creation of the IngressClass resource. IngressClasses are immutable and cannot be changed after creation. We do not support namespaced IngressClasses, yet, so a ClusterRole and a ClusterRoleBinding is required. |
@@ -574,8 +580,8 @@ metadata:
 | defaultBackend.unhealthyPodEvictionPolicy | string | `""` | Eviction policy for unhealthy pods guarded by PodDisruptionBudget. Ref: https://kubernetes.io/blog/2023/01/06/unhealthy-pod-eviction-policy-for-pdbs/ |
 | defaultBackend.updateStrategy | object | `{}` | The update strategy to apply to the Deployment or DaemonSet # |
 | dhParam | string | `""` | A base64-encoded Diffie-Hellman parameter. This can be generated with: `openssl dhparam 4096 2> /dev/null | base64` # Ref: https://github.com/kubernetes/ingress-nginx/tree/main/docs/examples/customization/ssl-dh-param |
-| global.image.registry | string | `"registry.k8s.io"` | Registry host to pull images from. |
-| imagePullSecrets | list | `[]` | Optional array of imagePullSecrets containing private registry credentials # Ref: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/ |
+| global.image.registry | string | `""` | Override the registry for all images. By default the controller uses docker.io and upstream components use registry.k8s.io. |
+| imagePullSecrets | list | `nil` | Names of registry pull Secrets in the release namespace, for example `[{name: regcred}]`. Inherits `global.imagePullSecrets` when unset. Use `[]` to rely on ServiceAccount or node credentials. # Ref: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/ |
 | namespaceOverride | string | `""` | Override the deployment namespace; defaults to .Release.Namespace |
 | portNamePrefix | string | `""` | Prefix for TCP and UDP ports names in ingress controller service # Some cloud providers, like Yandex Cloud may have a requirements for a port name regex to support cloud load balancer integration |
 | rbac.create | bool | `true` |  |

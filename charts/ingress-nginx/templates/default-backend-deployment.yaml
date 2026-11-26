@@ -39,9 +39,7 @@ spec:
         {{- toYaml .Values.defaultBackend.podLabels | nindent 8 }}
       {{- end }}
     spec:
-    {{- if .Values.imagePullSecrets }}
-      imagePullSecrets: {{ toYaml .Values.imagePullSecrets | nindent 8 }}
-    {{- end }}
+      {{- include "ingress-nginx.imagePullSecrets" . | nindent 6 }}
     {{- if .Values.defaultBackend.priorityClassName }}
       priorityClassName: {{ .Values.defaultBackend.priorityClassName }}
     {{- end }}
@@ -54,7 +52,7 @@ spec:
       containers:
         - name: {{ template "ingress-nginx.name" . }}-default-backend
           {{- with (merge .Values.defaultBackend.image .Values.global.image) }}
-          image: {{ if .repository }}{{ .repository }}{{ else }}{{ .registry }}/{{ .image }}{{ end }}:{{ .tag }}{{ if .digest }}@{{ .digest }}{{ end }}
+          image: {{ if .repository }}{{ .repository }}{{ else }}{{ default "registry.k8s.io" .registry }}/{{ .image }}{{ end }}:{{ .tag }}{{ if .digest }}@{{ .digest }}{{ end }}
           {{- end }}
           imagePullPolicy: {{ .Values.defaultBackend.image.pullPolicy }}
         {{- if .Values.defaultBackend.extraArgs }}

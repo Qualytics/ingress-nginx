@@ -79,6 +79,31 @@ Get specific image
 {{- end -}}
 
 {{/*
+Local image pull secrets override a parent chart's global registry credentials.
+*/}}
+{{- define "ingress-nginx.imagePullSecrets" -}}
+{{- $secrets := .Values.imagePullSecrets -}}
+{{- if eq $secrets nil -}}
+{{- $secrets = .Values.global.imagePullSecrets -}}
+{{- end -}}
+{{- with $secrets }}
+imagePullSecrets:
+{{- range . }}
+  - name: {{ if kindIs "string" . }}{{ . | quote }}{{ else }}{{ .name | quote }}{{ end }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{/*
+Resolve the controller image, retaining the upstream registry for custom image paths.
+*/}}
+{{- define "ingress-nginx.controllerImage" -}}
+{{- $registry := default (ternary "docker.io" "registry.k8s.io" (eq .image "qualyticsai/ingress-nginx-controller")) .registry -}}
+{{- $repository := default (printf "%s/%s" $registry (include "ingress-nginx.image" .)) .repository -}}
+{{- printf "%s:%s%s" $repository .tag (include "ingress-nginx.imageDigest" .) -}}
+{{- end -}}
+
+{{/*
 Get specific image digest
 */}}
 {{- define "ingress-nginx.imageDigest" -}}
@@ -241,7 +266,7 @@ Extra modules.
 {{- define "extraModules" -}}
 - name: {{ .name }}
   {{- with .image }}
-  image: {{ if .repository }}{{ .repository }}{{ else }}{{ .registry }}/{{ .image }}{{ end }}:{{ .tag }}{{ if .digest }}@{{ .digest }}{{ end }}
+  image: {{ if .repository }}{{ .repository }}{{ else }}{{ default "registry.k8s.io" .registry }}/{{ .image }}{{ end }}:{{ .tag }}{{ if .digest }}@{{ .digest }}{{ end }}
   command:
   {{- if .distroless }}
     - /init_module
