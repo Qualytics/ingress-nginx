@@ -313,7 +313,7 @@ cmake -B build -G Ninja -Wno-dev \
         -DWITH_PROMETHEUS=OFF \
         -DWITH_ASYNC_EXPORT_PREVIEW=OFF \
         -DWITH_METRICS_EXEMPLAR_PREVIEW=OFF
-      cmake --build build
+      cmake --build build --parallel "${CORES}"
       cmake --install build
 
 cd "$BUILD_PATH/ssdeep"
