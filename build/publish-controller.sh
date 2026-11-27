@@ -50,9 +50,6 @@ for variant in "${controller_images[@]}"; do
     cosign sign --yes "$repository@$digest"
     cosign verify --certificate-identity "$identity" --certificate-oidc-issuer "$issuer" "$repository@$digest" >/dev/null
   fi
-  oras tag "$repository@$digest" "${ref##*:}"
-  [[ $(oras manifest fetch --descriptor "$ref" | jq -er '.digest') == "$digest" ]]
-  printf '%s\n' "$ref@$digest"
 done
 
 # Publish verification material and SBOMs without distributing the private image layers.
@@ -78,3 +75,13 @@ else
     --target "$(git rev-parse HEAD)" --latest=false --title "Qualytics ingress-nginx $version" \
     --notes "Signed multiarchitecture image indexes, Sigstore bundles and software bills of materials for the standard controller, chroot controller and admission webhook certificate helper. Images are available to authenticated Qualytics customers on Docker Hub."
 fi
+
+# A version tag becomes visible only after every candidate and its release metadata are verified.
+for variant in "${controller_images[@]}"; do
+  ref=$(controller_image_ref "$variant" "$version")
+  repository=${ref%:*}
+  digest="sha256:$(shasum -a 256 "$work/$variant.index.json" | cut -d ' ' -f 1)"
+  oras tag "$repository@$digest" "${ref##*:}"
+  [[ $(oras manifest fetch --descriptor "$ref" | jq -er '.digest') == "$digest" ]]
+  printf '%s\n' "$ref@$digest"
+done
