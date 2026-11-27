@@ -92,6 +92,7 @@ if [ "${SKIP_INGRESS_IMAGE_CREATION}" = "false" ]; then
     make BASE_IMAGE="${NGINX_BASE_IMAGE}" -C "${DIR}"/../../ clean-image build image
   fi
 
+  make -C "${DIR}"/../../ image-webhook-certgen
   echo "[dev-env] .. done building controller images"
 fi
 
@@ -112,6 +113,6 @@ KIND_WORKERS=$(kind get nodes --name="${KIND_CLUSTER_NAME}" | grep worker | awk 
 echo "[dev-env] copying docker images to cluster..."
 
 kind load docker-image --name="${KIND_CLUSTER_NAME}" --nodes="${KIND_WORKERS}" nginx-ingress-controller:e2e
-kind load docker-image --name="${KIND_CLUSTER_NAME}" --nodes="${KIND_WORKERS}" "${REGISTRY}/${variant}:${TAG}"
+kind load docker-image --name="${KIND_CLUSTER_NAME}" --nodes="${KIND_WORKERS}" "${REGISTRY}/${variant}:${TAG}" "${REGISTRY}/controller:kube-webhook-certgen-${TAG}"
 echo "[dev-env] running e2e tests..."
 make -C "${DIR}"/../../ e2e-test

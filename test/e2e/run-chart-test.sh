@@ -81,14 +81,14 @@ if [ "${SKIP_IMAGE_CREATION:-false}" = "false" ]; then
     go install github.com/onsi/ginkgo/v2/ginkgo@v2.28.1
   fi
   echo "[dev-env] building image"
-  make -C ${DIR}/../../ clean-image build image
+  make -C ${DIR}/../../ clean-image build image image-webhook-certgen
 fi
 
 
 KIND_WORKERS=$(kind get nodes --name="${KIND_CLUSTER_NAME}" | awk '{printf (NR>1?",":"") $1}')
 echo "[dev-env] copying docker images to cluster..."
 
-kind load docker-image --name="${KIND_CLUSTER_NAME}" --nodes=${KIND_WORKERS} ${REGISTRY}/controller:${TAG}
+kind load docker-image --name="${KIND_CLUSTER_NAME}" --nodes="${KIND_WORKERS}" "${REGISTRY}/controller:${TAG}" "${REGISTRY}/controller:kube-webhook-certgen-${TAG}"
 
 if [ "${SKIP_CERT_MANAGER_CREATION:-false}" = "false" ]; then
   echo "[dev-env] deploying cert-manager..."
@@ -116,4 +116,4 @@ docker run \
   --entrypoint ct \
   --rm \
   ingress-controller/chart-runner:e2e \
-    install --charts charts/ingress-nginx
+    install --charts charts/ingress-nginx --helm-extra-set-args="--values=/workdir/test/e2e-image/webhook-values.yaml"

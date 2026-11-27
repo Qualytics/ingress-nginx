@@ -35,7 +35,7 @@ jobs:
       - uses: sigstore/cosign-installer@881c63bd87e38389154debd8331404ce7ca8a3ab # v4.1.4
         with:
           cosign-release: v3.1.5
-      - name: Verify signed controller image pins
+      - name: Verify signed controller and webhook image pins
         id: images
         working-directory: charts/ingress-nginx
         run: |
@@ -43,33 +43,47 @@ jobs:
           tag=$(yq -r '.controller.image.tag' values.yaml)
           [[ "$tag" == "v$(yq -r '.appVersion' Chart.yaml)" ]]
           [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-qualytics\.[0-9]+$ ]]
-          digest=$(yq -r '.controller.image.digest' values.yaml)
-          chroot_digest=$(yq -r '.controller.image.digestChroot' values.yaml)
-          if [[ -z "$digest" && -z "$chroot_digest" ]]; then
-            echo "::notice::Chart publication is pending both Docker Hub image digests."
+          pins=$(yq '[.controller.image.digest, .controller.image.digestChroot, .controller.admissionWebhooks.patch.image.digest]
+            | map(select(. != null and . != "")) | length' values.yaml)
+          if [[ "$pins" == 0 ]]; then
+            echo "::notice::Chart publication is pending all three signed image digests."
             echo "ready=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ && "$chroot_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          [[ "$pins" == 3 ]] || { echo "::error::A release requires controller, chroot and webhook helper digests."; exit 1; }
+          source ../../build/controller-images.sh
           source=https://github.com/Qualytics/ingress-nginx
           identity="$source/.github/workflows/qualytics-controller.yml@refs/heads/main"
-          for chroot in false true; do
-            variant=controller
-            pin=$digest
-            if [[ "$chroot" == true ]]; then
-              variant=controller-chroot
-              pin=$chroot_digest
-            fi
-            repo="docker.io/qualyticsai/ingress-nginx-$variant"
-            rendered=$(helm template validate . --set "controller.image.chroot=$chroot" --show-only templates/controller-deployment.yaml |
-              yq -r '.spec.template.spec.containers[0].image')
-            [[ "$rendered" == "$repo:$tag@$pin" ]]
+          for variant in "${controller_images[@]}"; do
+            ref=$(controller_image_ref "$variant" "$tag")
+            repo=${ref%:*}
+            image_tag=${ref##*:}
+            values=()
+            templates=(templates/controller-deployment.yaml)
+            case "$variant" in
+              controller)
+                pin=$(yq -r '.controller.image.digest' values.yaml) ;;
+              controller-chroot)
+                values=(--set controller.image.chroot=true)
+                pin=$(yq -r '.controller.image.digestChroot' values.yaml) ;;
+              controller-webhook-certgen)
+                pin=$(yq -r '.controller.admissionWebhooks.patch.image.digest' values.yaml)
+                templates=(
+                  templates/admission-webhooks/job-patch/job-createSecret.yaml
+                  templates/admission-webhooks/job-patch/job-patchWebhook.yaml
+                ) ;;
+            esac
+            [[ "$pin" =~ ^sha256:[0-9a-f]{64}$ ]]
+            for template in "${templates[@]}"; do
+              rendered=$(helm template validate . "${values[@]}" --show-only "$template" | yq -r '.spec.template.spec.containers[0].image')
+              [[ "$rendered" == "$ref@$pin" ]] || { echo "::error::$template must use $ref@$pin"; exit 1; }
+            done
             index="provenance/$tag/$variant.index.json"
             bundle="provenance/$tag/$variant.sigstore.json"
             cosign verify-blob --bundle "$bundle" --certificate-identity "$identity" \
               --certificate-oidc-issuer https://token.actions.githubusercontent.com "$index"
             [[ "sha256:$(sha256sum "$index" | cut -d ' ' -f 1)" == "$pin" ]]
-            jq -e --arg repo "$repo" --arg tag "$tag" --arg source "$source" '
+            jq -e --arg repo "$repo" --arg tag "$image_tag" --arg source "$source" '
               .annotations["org.opencontainers.image.ref.name"] == $repo and
               .annotations["org.opencontainers.image.version"] == $tag and
               .annotations["org.opencontainers.image.source"] == $source and

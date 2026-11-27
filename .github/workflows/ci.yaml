@@ -197,7 +197,7 @@ jobs:
         run: |
           echo "building images..."
           export TAGNGINX=$(cat images/nginx/TAG)
-          make BASE_IMAGE=registry.k8s.io/ingress-nginx/nginx:${TAGNGINX} clean-image build image image-chroot
+          make BASE_IMAGE=registry.k8s.io/ingress-nginx/nginx:${TAGNGINX} clean-image build image image-chroot image-webhook-certgen
           make -C test/e2e-image image
 
           echo "creating images cache..."
@@ -205,6 +205,7 @@ jobs:
             nginx-ingress-controller:e2e \
             ingress-controller/controller:1.0.0-dev \
             ingress-controller/controller-chroot:1.0.0-dev \
+            ingress-controller/controller:kube-webhook-certgen-1.0.0-dev \
             | gzip > docker.tar.gz
 
       - name: cache

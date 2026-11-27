@@ -95,7 +95,7 @@ imagePullSecrets:
 {{- end -}}
 
 {{/*
-Resolve the controller image, retaining the upstream registry for custom image paths.
+Resolve images published in the Qualytics controller repository, retaining the upstream registry for other image paths.
 */}}
 {{- define "ingress-nginx.controllerImage" -}}
 {{- $registry := default (ternary "docker.io" "registry.k8s.io" (eq .image "qualyticsai/ingress-nginx-controller")) .registry -}}
