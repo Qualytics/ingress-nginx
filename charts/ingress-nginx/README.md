@@ -2,7 +2,7 @@
 
 The Qualytics distribution of the Kubernetes ingress-nginx controller includes security updates from the open-source community.
 
-![Version: 4.15.2](https://img.shields.io/badge/Version-4.15.2-informational?style=flat-square) ![AppVersion: 1.30.8-qualytics.2](https://img.shields.io/badge/AppVersion-1.30.8--qualytics.2-informational?style=flat-square)
+![Version: 4.15.3](https://img.shields.io/badge/Version-4.15.3-informational?style=flat-square) ![AppVersion: 1.30.8-qualytics.3](https://img.shields.io/badge/AppVersion-1.30.8--qualytics.3-informational?style=flat-square)
 
 To use, add `ingressClassName: nginx` spec field or the `kubernetes.io/ingress.class: nginx` annotation to your Ingress resources.
 
@@ -10,7 +10,9 @@ This chart bootstraps an ingress-nginx deployment on a [Kubernetes](http://kuber
 
 ## Requirements
 
-Kubernetes: `>=1.21.0-0`
+Kubernetes: `>=1.35.0-0`
+
+Kubernetes 1.35 is the minimum for this chart. Qualytics tests chart installation and the standard and chroot controllers on Kubernetes 1.35, 1.36 and 1.37. Upgrade older clusters before upgrading this chart.
 
 ## Get Repo Info
 
@@ -21,13 +23,13 @@ helm repo update
 
 ## Install Chart
 
-The controller and chroot images are private Docker Hub repositories. Use credentials with pull access to both `qualyticsai/ingress-nginx-controller` and `qualyticsai/ingress-nginx-controller-chroot`. When your credentials are stored in a Kubernetes Secret, create it in the release namespace and pass its name to Helm.
+The controller and admission webhook helper use the private Docker Hub repository `qualyticsai/ingress-nginx-controller`. The chroot controller also requires access to `qualyticsai/ingress-nginx-controller-chroot`. Create the registry pull Secret in the release namespace before installation so Helm’s pre-install hook can pull the helper.
 
 ```console
 helm install [RELEASE_NAME] qualytics-ingress/ingress-nginx --namespace [NAMESPACE] --set 'imagePullSecrets[0].name=regcred'
 ```
 
-Replace `regcred` with your registry Secret name. Omit the flag if the cluster already authenticates pulls through its ServiceAccount or nodes. A parent chart can supply `global.imagePullSecrets`. An explicit `imagePullSecrets` list takes precedence, including an empty list.
+Replace `regcred` with your registry Secret name. You can omit the flag if the nodes authenticate pulls or the controller and admission Jobs use pre-existing ServiceAccounts with registry credentials. For an existing admission ServiceAccount, set `controller.admissionWebhooks.patch.serviceAccount.create=false` and supply its `name`. A parent chart can supply `global.imagePullSecrets`. An explicit chart-local list takes precedence, including an empty list.
 
 _See [configuration](#configuration) below._
 
@@ -51,11 +53,11 @@ helm upgrade [RELEASE_NAME] qualytics-ingress/ingress-nginx --namespace [NAMESPA
 
 _See [helm upgrade](https://helm.sh/docs/helm/helm_upgrade/) for command documentation._
 
-For an existing upstream chart 4.15.1 installation, use its release name, namespace and operator-supplied values. Review any explicit controller image, tag and digest overrides so the upgrade selects the intended image. The validating webhook jobs and optional default backend use their existing upstream repositories.
+For an existing upstream chart 4.15.1 installation, use its release name, namespace and operator-supplied values. Review any explicit controller and webhook helper image, tag or digest overrides before upgrading. The optional default backend uses its upstream repository.
 
-For a private mirror, set `global.image.registry` to mirror all images, or set `controller.image.registry` and `controller.image.image` for the controller alone. `controller.image.repository` accepts a fully qualified repository. With that override and `controller.image.chroot: true`, supply the complete chroot repository name. Preserve the published index digests when mirroring.
+For a private or offline registry, mirror the selected controller and the `kube-webhook-certgen-<controller tag>` image before installation or upgrade. Set `global.image.registry` when the mirror preserves the repository paths. To use different paths, set `controller.image.repository` and `controller.admissionWebhooks.patch.image.repository` to their fully qualified names. With `controller.image.chroot: true`, the controller repository override must name the chroot build. Preserve the published multi-architecture index digests when mirroring.
 
-The chart package includes both signed image indexes and their Sigstore bundles under `provenance/<controller tag>/`. Chart CI verifies the signing workflow, each pinned digest, image name, version and supported architectures.
+The chart package includes all three signed image indexes and their Sigstore bundles under `provenance/<controller tag>/`. Chart CI verifies the signing workflow, each pinned digest, image name, version and supported architectures.
 
 ### Migrating from stable/nginx-ingress
 
@@ -250,7 +252,7 @@ metadata:
     kubernetes.io/metadata.name: ingress-nginx
     name: ingress-nginx
     pod-security.kubernetes.io/enforce: restricted
-    pod-security.kubernetes.io/enforce-version: v1.31
+    pod-security.kubernetes.io/enforce-version: v1.35
 ```
 
 ## Values
@@ -281,10 +283,10 @@ metadata:
 | controller.admissionWebhooks.namespaceSelector | object | `{}` |  |
 | controller.admissionWebhooks.objectSelector | object | `{}` |  |
 | controller.admissionWebhooks.patch.enabled | bool | `true` |  |
-| controller.admissionWebhooks.patch.image.digest | string | `"sha256:01038e7de14b78d702d2849c3aad72fd25903c4765af63cf16aa3398f5d5f2dd"` |  |
-| controller.admissionWebhooks.patch.image.image | string | `"ingress-nginx/kube-webhook-certgen"` |  |
+| controller.admissionWebhooks.patch.image.digest | string | `"sha256:d879ccd9101b4ba2bad3c4d821bc2672aad1cb2cacc62736bff6f6eb297bd7a1"` |  |
+| controller.admissionWebhooks.patch.image.image | string | `"qualyticsai/ingress-nginx-controller"` |  |
 | controller.admissionWebhooks.patch.image.pullPolicy | string | `"IfNotPresent"` |  |
-| controller.admissionWebhooks.patch.image.tag | string | `"v1.6.9"` |  |
+| controller.admissionWebhooks.patch.image.tag | string | `"kube-webhook-certgen-v1.30.8-qualytics.3"` |  |
 | controller.admissionWebhooks.patch.labels | object | `{}` | Labels to be added to patch job resources |
 | controller.admissionWebhooks.patch.networkPolicy.enabled | bool | `false` | Enable 'networkPolicy' or not |
 | controller.admissionWebhooks.patch.nodeSelector."kubernetes.io/os" | string | `"linux"` |  |
@@ -355,8 +357,8 @@ metadata:
 | controller.hostname | object | `{}` | Optionally customize the pod hostname. |
 | controller.image.allowPrivilegeEscalation | bool | `false` |  |
 | controller.image.chroot | bool | `false` |  |
-| controller.image.digest | string | `"sha256:c0a316e9fde30ccacf540d2597befebe00fd379217b0e7110797af955a1f4464"` |  |
-| controller.image.digestChroot | string | `"sha256:f05bdc471bb71cda00b8a1cdb21b45b69e509ed260b97cbdc391740d1780b7e8"` |  |
+| controller.image.digest | string | `"sha256:a432d97277d1907319ade1fef1c030d0dee41f36d1249f30f31f37bc779d7f24"` |  |
+| controller.image.digestChroot | string | `"sha256:b10660c5c617be8f1641c69a3903d5fabe99eb203e6d2d608f205a883171538f"` |  |
 | controller.image.image | string | `"qualyticsai/ingress-nginx-controller"` |  |
 | controller.image.pullPolicy | string | `"IfNotPresent"` |  |
 | controller.image.readOnlyRootFilesystem | bool | `false` |  |
@@ -364,7 +366,7 @@ metadata:
 | controller.image.runAsNonRoot | bool | `true` |  |
 | controller.image.runAsUser | int | `101` | This value must not be changed using the official image. uid=101(www-data) gid=82(www-data) groups=82(www-data) |
 | controller.image.seccompProfile.type | string | `"RuntimeDefault"` |  |
-| controller.image.tag | string | `"v1.30.8-qualytics.2"` |  |
+| controller.image.tag | string | `"v1.30.8-qualytics.3"` |  |
 | controller.ingressClass | string | `"nginx"` | For backwards compatibility with ingress.class annotation, use ingressClass. Algorithm is as follows, first ingressClassName is considered, if not present, controller looks for ingress.class annotation |
 | controller.ingressClassByName | bool | `false` | Process IngressClass per name (additionally as per spec.controller). |
 | controller.ingressClassResource | object | `{"aliases":[],"annotations":{},"controllerValue":"k8s.io/ingress-nginx","default":false,"enabled":true,"name":"nginx","parameters":{}}` | This section refers to the creation of the IngressClass resource. IngressClasses are immutable and cannot be changed after creation. We do not support namespaced IngressClasses, yet, so a ClusterRole and a ClusterRoleBinding is required. |

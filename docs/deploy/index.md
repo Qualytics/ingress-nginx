@@ -1,5 +1,9 @@
 # Installation Guide
 
+Install the Qualytics distribution on Kubernetes 1.35 or later using the [Qualytics Helm installation instructions](../../README.md#kubernetes-support-and-installation). The upstream installation guide below documents the archived Kubernetes distribution.
+
+## Historical upstream installation guide
+
 There are multiple ways to install the Ingress-Nginx Controller:
 
 - with [Helm](https://helm.sh), using the project repository chart;

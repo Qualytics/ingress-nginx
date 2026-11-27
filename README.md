@@ -4,7 +4,24 @@ Qualytics brings together community and open-source maintenance work to provide 
 
 Qualytics publishes the `ingress-nginx` Helm chart at `https://qualytics.github.io/ingress-nginx`. The Qualytics self-hosted chart includes it as the optional `nginx` dependency. Existing installations keep their `nginx.*` values. [Standalone chart](charts/ingress-nginx/README.md) · [Self-hosted image inventory](https://github.com/Qualytics/qualytics-self-hosted/blob/main/docs/docker-images.md)
 
-The chart pins the Linux amd64 and arm64 image index by digest. Use your Qualytics Docker Hub credentials to pull `qualyticsai/ingress-nginx-controller` or `qualyticsai/ingress-nginx-controller-chroot`. Each controller release publishes its signed indexes, Sigstore bundles and architecture-specific software bills of materials for independent verification. [Controller releases](https://github.com/Qualytics/ingress-nginx/releases) · [Signature verification](build/publish-controller.sh)
+The chart pins the Linux amd64 and arm64 image indexes by digest. The controller and webhook helper share the private Docker Hub repository `qualyticsai/ingress-nginx-controller`. The chroot image also needs access to `qualyticsai/ingress-nginx-controller-chroot`. Each controller release publishes its signed indexes, Sigstore bundles and architecture-specific software bills of materials for independent verification. [Controller releases](https://github.com/Qualytics/ingress-nginx/releases) · [Signature verification](build/publish-controller.sh)
+
+## Kubernetes support and installation
+
+Qualytics ingress-nginx requires Kubernetes 1.35 or later. Upgrade older clusters before installing or upgrading to chart 4.15.3.
+
+| Qualytics controller | Helm chart | Minimum Kubernetes | Tested Kubernetes minors |
+|---|---|---|---|
+| v1.30.8-qualytics.3 | 4.15.3 | 1.35 | 1.35, 1.36, 1.37 |
+
+To install the standalone chart, first create an image pull Secret in the release namespace. The admission webhook uses it during installation. Substitute your Secret name for `regcred`.
+
+```sh
+helm repo add qualytics-ingress https://qualytics.github.io/ingress-nginx
+helm repo update qualytics-ingress
+helm upgrade --install ingress-nginx qualytics-ingress/ingress-nginx --version 4.15.3 \
+  --namespace ingress-nginx --set 'imagePullSecrets[0].name=regcred'
+```
 
 ## Overview
 
@@ -27,12 +44,9 @@ For a Qualytics deployment, contact Qualytics Support. Include the chart version
 
 Qualytics publishes chart packages in [Qualytics releases](https://github.com/Qualytics/ingress-nginx/releases). The earlier controller and chart history is available in [Kubernetes releases](https://github.com/kubernetes/ingress-nginx/releases).
 
-Qualytics tests the standard and chroot controllers on Kubernetes 1.35, 1.36 and 1.37.
-
 ### Historical upstream version matrix
 
-Supported versions for the ingress-nginx project mean that we have completed E2E tests, and they are passing for
-the versions listed. Ingress-Nginx versions **may** work on older versions, but the project does not make that guarantee.
+These rows record test coverage and support status for upstream releases at the time they shipped. Current Qualytics releases follow the Kubernetes support table above.
 
 | Supported | Ingress-NGINX version | k8s supported version         | Alpine Version | Nginx Version | Helm Chart Version |
 | :-------: | --------------------- | ----------------------------- | -------------- | ------------- | ------------------ |

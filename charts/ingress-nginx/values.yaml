@@ -30,9 +30,9 @@ controller:
     ## for backwards compatibility consider setting the full image url via the repository value below
     ## use *either* current default registry/image or repository format or installing chart by providing the values.yaml will fail
     ## repository:
-    tag: "v1.30.8-qualytics.2"
-    digest: sha256:c0a316e9fde30ccacf540d2597befebe00fd379217b0e7110797af955a1f4464
-    digestChroot: sha256:f05bdc471bb71cda00b8a1cdb21b45b69e509ed260b97cbdc391740d1780b7e8
+    tag: "v1.30.8-qualytics.3"
+    digest: "sha256:a432d97277d1907319ade1fef1c030d0dee41f36d1249f30f31f37bc779d7f24"
+    digestChroot: "sha256:b10660c5c617be8f1641c69a3903d5fabe99eb203e6d2d608f205a883171538f"
     pullPolicy: IfNotPresent
     runAsNonRoot: true
     # -- This value must not be changed using the official image.
@@ -848,13 +848,13 @@ controller:
     patch:
       enabled: true
       image:
-        # registry: registry.k8s.io
-        image: ingress-nginx/kube-webhook-certgen
+        # registry: docker.io
+        image: qualyticsai/ingress-nginx-controller
         ## for backwards compatibility consider setting the full image url via the repository value below
         ## use *either* current default registry/image or repository format or installing chart by providing the values.yaml will fail
         ## repository:
-        tag: v1.6.9
-        digest: sha256:01038e7de14b78d702d2849c3aad72fd25903c4765af63cf16aa3398f5d5f2dd
+        tag: kube-webhook-certgen-v1.30.8-qualytics.3
+        digest: "sha256:d879ccd9101b4ba2bad3c4d821bc2672aad1cb2cacc62736bff6f6eb297bd7a1"
         pullPolicy: IfNotPresent
       # -- Provide a priority class name to the webhook patching job
       ##

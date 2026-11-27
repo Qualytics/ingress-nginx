@@ -1,0 +1,18 @@
+suite: Kubernetes compatibility when used as a dependency
+templates:
+  - validate-kube-version.yaml
+tests:
+  - it: rejects Kubernetes 1.34
+    capabilities:
+      majorVersion: 1
+      minorVersion: 34
+    asserts:
+      - failedTemplate:
+          errorPattern: 'Qualytics ingress-nginx requires Kubernetes >=1\.35\.0-0, found v1\.34\.0'
+  - it: accepts Kubernetes 1.35
+    capabilities:
+      majorVersion: 1
+      minorVersion: 35
+    asserts:
+      - hasDocuments:
+          count: 0

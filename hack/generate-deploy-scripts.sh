@@ -22,9 +22,8 @@ fi
 set -o nounset
 set -o pipefail
 
-K8S_VERSION="1.22"
-
 DIR=$(cd $(dirname "${BASH_SOURCE}")/.. && pwd -P)
+K8S_VERSION=$(head -n 1 "$DIR/test/e2e/kind-node-images" | cut -d@ -f1)
 
 # clean
 rm -rf ${DIR}/deploy/static/provider/*

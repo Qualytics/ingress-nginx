@@ -58,13 +58,13 @@ jobs:
             ref=$(controller_image_ref "$variant" "$tag")
             repo=${ref%:*}
             image_tag=${ref##*:}
-            values=()
+            chroot=false
             templates=(templates/controller-deployment.yaml)
             case "$variant" in
               controller)
                 pin=$(yq -r '.controller.image.digest' values.yaml) ;;
               controller-chroot)
-                values=(--set controller.image.chroot=true)
+                chroot=true
                 pin=$(yq -r '.controller.image.digestChroot' values.yaml) ;;
               controller-webhook-certgen)
                 pin=$(yq -r '.controller.admissionWebhooks.patch.image.digest' values.yaml)
@@ -75,7 +75,7 @@ jobs:
             esac
             [[ "$pin" =~ ^sha256:[0-9a-f]{64}$ ]]
             for template in "${templates[@]}"; do
-              rendered=$(helm template validate . "${values[@]}" --show-only "$template" | yq -r '.spec.template.spec.containers[0].image')
+              rendered=$(helm template validate . --set "controller.image.chroot=$chroot" --show-only "$template" | yq -r '.spec.template.spec.containers[0].image')
               [[ "$rendered" == "$ref@$pin" ]] || { echo "::error::$template must use $ref@$pin"; exit 1; }
             done
             index="provenance/$tag/$variant.index.json"
