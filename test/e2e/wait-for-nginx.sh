@@ -24,6 +24,8 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 export NAMESPACE=$1
 export NAMESPACE_OVERLAY=$2
 export IS_CHROOT=$3
+repository=ingress-controller/controller
+if [[ "$IS_CHROOT" == true ]]; then repository=ingress-controller/controller-chroot; fi
 
 echo "deploying NGINX Ingress controller in namespace $NAMESPACE"
 
@@ -52,14 +54,15 @@ if [[ ! -z "$NAMESPACE_OVERLAY" && -d "$DIR/namespace-overlays/$NAMESPACE_OVERLA
     echo "Namespace overlay $NAMESPACE_OVERLAY is being used for namespace $NAMESPACE"
     helm install nginx-ingress ${DIR}/charts/ingress-nginx \
         --namespace=$NAMESPACE \
-        --values "$DIR/namespace-overlays/$NAMESPACE_OVERLAY/values.yaml"
+        --values "$DIR/namespace-overlays/$NAMESPACE_OVERLAY/values.yaml" \
+        --set-string controller.image.repository="$repository" --set controller.image.chroot="$IS_CHROOT"
 else
     cat << EOF | helm install nginx-ingress ${DIR}/charts/ingress-nginx --namespace=$NAMESPACE --values -
 # TODO: remove the need to use fullnameOverride
 fullnameOverride: nginx-ingress
 controller:
   image:
-    repository: ingress-controller/controller
+    repository: ${repository}
     chroot: ${IS_CHROOT}
     tag: 1.0.0-dev
     digest:

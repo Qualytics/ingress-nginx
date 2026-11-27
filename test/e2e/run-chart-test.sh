@@ -62,7 +62,7 @@ export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/kind-config-$KIND_CLUSTER_NAME}"
 if [ "${SKIP_CLUSTER_CREATION:-false}" = "false" ]; then
   echo "[dev-env] creating Kubernetes cluster with kind"
 
-  export K8S_VERSION=${K8S_VERSION:-v1.35.1@sha256:05d7bcdefbda08b4e038f644c4df690cdac3fba8b06f8289f30e10026720a1ab}
+  K8S_VERSION=${K8S_VERSION:-$(tail -n 1 "$DIR/kind-node-images")}
 
   kind create cluster \
     --verbosity=${KIND_LOG_LEVEL} \
@@ -106,6 +106,7 @@ if [ "${SKIP_CERT_MANAGER_CREATION:-false}" = "false" ]; then
 fi
 
 echo "[dev-env] running helm chart e2e tests..."
+make -C "$DIR/../e2e-image" chart-runner
 docker run \
   --name ct \
   --volume "${KUBECONFIG}:/root/.kube/config:ro" \
@@ -114,5 +115,5 @@ docker run \
   --workdir /workdir \
   --entrypoint ct \
   --rm \
-  registry.k8s.io/ingress-nginx/e2e-test-runner:v2.2.9@sha256:6eda6a8d17ff65c5af647abb0714b882047b77d18161712d77daf5f610fd4020 \
+  ingress-controller/chart-runner:e2e \
     install --charts charts/ingress-nginx

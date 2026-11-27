@@ -29,5 +29,7 @@ if [ -z "${PKG}" ]; then
   exit 1
 fi
 
-go test -v \
-  $(go list "${PKG}/..." | grep -v vendor | grep -v '/test/e2e' | grep -v images | grep -v "docs/examples")
+# The flag tests check that the default NGINX ports are free. Other packages listen on those ports.
+packages=$(go list "${PKG}/..." | grep -v vendor | grep -v '/test/e2e' | grep -v images | grep -v "docs/examples")
+go test -v $(printf '%s\n' "$packages" | grep -Fxv "${PKG}/pkg/flags")
+go test -v "${PKG}/pkg/flags"

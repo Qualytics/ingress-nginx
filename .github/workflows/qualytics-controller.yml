@@ -35,11 +35,9 @@ jobs:
         include:
           - arch: amd64
             runner: ubuntu-24.04
-            kind_sha: aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d
             yq_sha: 129534601871538efe0ba4c5e62a34fb1d5f469bcb975c4fddeb467d82974973
           - arch: arm64
             runner: ubuntu-24.04-arm
-            kind_sha: 20022bee6cfcd5086cb7234d218e3454e6090022f2a8f55d1fa7fcf42c3867a2
             yq_sha: 89f69310b61b68d1245065a1241d1fc843f7a36cd6103ffd77ad987613bd1b67
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 240
@@ -59,22 +57,18 @@ jobs:
       - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
         with:
           version: v4.3.2
-      - uses: azure/setup-kubectl@bda439f5f36b99b262ebdcd3613869bddb064c8e # v5.2.0
-        with:
-          version: v1.35.3
+      - uses: ./.github/actions/setup-kind
       - name: Install test tools
         env:
           ARCH: ${{ matrix.arch }}
-          KIND_SHA: ${{ matrix.kind_sha }}
           YQ_SHA: ${{ matrix.yq_sha }}
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y skopeo
           cd "$RUNNER_TEMP"
-          curl --fail --location --retry 3 "https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-linux-$ARCH" -o kind
           curl --fail --location --retry 3 "https://github.com/mikefarah/yq/releases/download/v4.54.3/yq_linux_$ARCH" -o yq
-          printf '%s  %s\n' "$KIND_SHA" kind "$YQ_SHA" yq | sha256sum --check
-          sudo install -m 0755 kind yq /usr/local/bin/
+          echo "$YQ_SHA  yq" | sha256sum --check
+          sudo install -m 0755 yq /usr/local/bin/yq
       - name: Build the release candidate from source
         env:
           ARCH: ${{ matrix.arch }}
@@ -99,7 +93,7 @@ jobs:
           ignore-unfixed: false
         env:
           TRIVY_IMAGE_SRC: docker
-      - name: Verify the installed libxml2 package and ModSecurity linkage
+      - name: Verify native package ownership and ModSecurity linkage
         env:
           VARIANT: ${{ matrix.variant }}
         run: |
@@ -109,7 +103,7 @@ jobs:
             --mount "type=bind,src=$PWD/images/nginx/rootfs/libxml2,dst=/packages/libxml2,readonly" \
             "qualytics-$VARIANT:qualification" -ec '
             root=$1
-            apk --root "$root" info --installed --quiet "libxml2=2.13.9-r4"
+            apk --root "$root" info --installed --quiet grpc protobuf "libxml2=2.13.9-r4"
             apk --root "$root" info --who-owns /usr/lib/libxml2.so.2.13.9 | grep -F "libxml2-2.13.9-r4"
             cd "$root"
             apk manifest "/packages/libxml2/$(apk --print-arch)/libxml2-2.13.9-r4.apk" | sed "s/^sha1://" | sha1sum -c
@@ -123,7 +117,12 @@ jobs:
         run: |
           options=()
           if [[ "$VARIANT" == controller-chroot ]]; then options+=(--chroot); fi
-          bash hack/qualytics/chart-smoke.sh "qualytics-$VARIANT:qualification" self-hosted-chart "${options[@]}"
+          mapfile -t nodes < test/e2e/kind-node-images
+          for node in "${nodes[@]}"; do
+            echo "::group::Qualify Kubernetes ${node%@*}"
+            K8S_VERSION="$node" bash hack/qualytics/chart-smoke.sh "qualytics-$VARIANT:qualification" self-hosted-chart "${options[@]}"
+            echo "::endgroup::"
+          done
       - name: Retain the exact qualified image and attestations for release
         if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'Qualytics/ingress-nginx'
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
@@ -134,8 +133,82 @@ jobs:
           compression-level: 0
           retention-days: 1
 
+  qualify-webhook:
+    name: Qualify webhook certgen linux/${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    env:
+      ARCH: ${{ matrix.arch }}
+      COMMIT_SHA: ${{ github.sha }}
+      CANDIDATE: docker.io/qualytics-local/kube-webhook-certgen:qualification
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          version: v0.39.1
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: v4.3.2
+      - uses: ./.github/actions/setup-kind
+      - name: Build the exact webhook candidate and attestations
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y skopeo
+          export VERSION="$(cat TAG)"
+          target=controller-webhook-certgen
+          archive="$target-$ARCH.tar"
+          docker buildx bake "$target" --set "$target.platform=linux/$ARCH" \
+            --set "$target.output=type=oci,dest=$archive" --sbom=true --provenance=mode=max
+          mv "$archive" "$RUNNER_TEMP/"
+          skopeo --override-os linux --override-arch "$ARCH" copy \
+            "oci-archive:$RUNNER_TEMP/$archive" "docker-daemon:$CANDIDATE"
+      - name: Scan the webhook candidate
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.76.2
+          image-ref: ${{ env.CANDIDATE }}
+          scanners: vuln
+          exit-code: '1'
+          ignore-unfixed: false
+        env:
+          TRIVY_IMAGE_SRC: docker
+      - name: Verify the webhook executable and metadata
+        run: |
+          version="kube-webhook-certgen-$(cat TAG)"
+          test "$(docker image inspect "$CANDIDATE" --format '{{.Os}}/{{.Architecture}} {{.Config.User}}')" = "linux/$ARCH 65532:65532"
+          test "$(docker image inspect "$CANDIDATE" --format '{{index .Config.Labels "org.opencontainers.image.version"}}')" = "$version"
+          test "$(docker image inspect "$CANDIDATE" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" = "$COMMIT_SHA"
+          output=$(docker run --rm --network none --read-only --cap-drop ALL "$CANDIDATE" version)
+          grep -Fx "$version" <<< "$output"
+          grep -Fx "go$(cat GOLANG_VERSION)" <<< "$output"
+      - name: Exercise admission certificate creation and webhook patching
+        run: |
+          mapfile -t nodes < test/e2e/kind-node-images
+          for node in "${nodes[@]}"; do
+            bash hack/qualytics/webhook-smoke.sh "$CANDIDATE" "$node"
+          done
+      - name: Retain the qualified webhook image and attestations
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'Qualytics/ingress-nginx'
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: controller-webhook-certgen-${{ matrix.arch }}
+          path: ${{ runner.temp }}/controller-webhook-certgen-${{ matrix.arch }}.tar
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
   sign:
-    needs: [unit, qualify]
+    needs: [unit, qualify, qualify-webhook]
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'Qualytics/ingress-nginx'
     runs-on: ubuntu-24.04
     permissions:
@@ -159,7 +232,8 @@ jobs:
           sudo apt-get install -y skopeo
           bash build/package-controller.sh "$RUNNER_TEMP/qualified" "$RUNNER_TEMP/images"
           mkdir "$RUNNER_TEMP/signed"
-          for variant in controller controller-chroot; do
+          source build/controller-images.sh
+          for variant in "${controller_images[@]}"; do
             cp "$RUNNER_TEMP/images/$variant.index.json" "$RUNNER_TEMP/signed/"
             cosign sign-blob --yes --bundle "$RUNNER_TEMP/signed/$variant.sigstore.json" "$RUNNER_TEMP/signed/$variant.index.json"
           done
@@ -210,4 +284,9 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y skopeo
+          gh release download v1.30.0 --repo docker/scout-cli --pattern docker-scout_1.30.0_linux_amd64.tar.gz --dir "$RUNNER_TEMP"
+          archive="$RUNNER_TEMP/docker-scout_1.30.0_linux_amd64.tar.gz"
+          echo "bd8d24896d2aa0f9e01d25830ac53cfd416a3254f8fbfce2cb10bcd7a1afe152  $archive" | sha256sum --check
+          mkdir -p "$HOME/.docker/cli-plugins"
+          tar -xzf "$archive" -C "$HOME/.docker/cli-plugins" docker-scout
           bash build/publish-controller.sh "$RUNNER_TEMP/qualified" "$RUNNER_TEMP/signed"

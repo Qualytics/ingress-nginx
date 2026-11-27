@@ -157,7 +157,6 @@ apk add \
   lmdb-tools \
   wget \
   curl-dev \
-  libprotobuf \
   git g++ pkgconf flex bison doxygen yajl-dev lmdb-dev libtool autoconf libxml2 libxml2-dev \
   python3 \
   libmaxminddb-dev \
@@ -172,9 +171,7 @@ apk add \
   build-base \
   pkgconfig \
   c-ares-dev \
-  re2-dev \
-  grpc-dev \
-  protobuf-dev
+  re2-dev
 
 # apk add -X http://dl-cdn.alpinelinux.org/alpine/edge/testing opentelemetry-cpp-dev
 

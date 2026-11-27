@@ -14,6 +14,11 @@ target "nginx-base" {
   context = "images/nginx/rootfs"
 }
 
+target "native-packages" {
+  inherits = ["nginx-base"]
+  target   = "native-packages"
+}
+
 target "binaries" {
   context    = "."
   dockerfile = "build/controller-binaries.Dockerfile"
@@ -43,6 +48,16 @@ target "controller-chroot" {
   dockerfile = "Dockerfile-chroot"
   contexts = {
     qualytics-libxml2 = "./images/nginx/rootfs/libxml2"
+    qualytics-native-packages = "target:native-packages"
   }
   tags       = ["${IMAGE}-chroot:${VERSION}"]
+}
+
+target "controller-webhook-certgen" {
+  context = "images/kube-webhook-certgen/rootfs"
+  args = {
+    VERSION    = "kube-webhook-certgen-${VERSION}"
+    COMMIT_SHA = COMMIT_SHA
+  }
+  tags = ["${IMAGE}:kube-webhook-certgen-${VERSION}"]
 }

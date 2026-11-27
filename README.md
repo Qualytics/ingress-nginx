@@ -27,6 +27,8 @@ For a Qualytics deployment, contact Qualytics Support. Include the chart version
 
 Qualytics publishes chart packages in [Qualytics releases](https://github.com/Qualytics/ingress-nginx/releases). The earlier controller and chart history is available in [Kubernetes releases](https://github.com/kubernetes/ingress-nginx/releases).
 
+Qualytics tests the standard and chroot controllers on Kubernetes 1.35, 1.36 and 1.37.
+
 ### Historical upstream version matrix
 
 Supported versions for the ingress-nginx project mean that we have completed E2E tests, and they are passing for

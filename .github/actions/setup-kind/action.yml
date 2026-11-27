@@ -1,0 +1,20 @@
+name: Set up Kubernetes test tools
+description: Install kind v0.33.0 and a kubectl client within one minor of all test clusters.
+runs:
+  using: composite
+  steps:
+    - uses: azure/setup-kubectl@bda439f5f36b99b262ebdcd3613869bddb064c8e # v5.2.0
+      with:
+        version: v1.36.7
+    - name: Install kind
+      shell: bash
+      run: |
+        case "$RUNNER_ARCH" in
+          X64) arch=amd64; checksum=aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d ;;
+          ARM64) arch=arm64; checksum=20022bee6cfcd5086cb7234d218e3454e6090022f2a8f55d1fa7fcf42c3867a2 ;;
+          *) echo "Unsupported runner architecture $RUNNER_ARCH" >&2; exit 1 ;;
+        esac
+        cd "$RUNNER_TEMP"
+        curl --fail --location --retry 3 "https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-linux-$arch" -o kind
+        echo "$checksum  kind" | sha256sum --check
+        sudo install -m 0755 kind /usr/local/bin/kind

@@ -11,7 +11,7 @@ case "${3:-}" in
   *) echo "Expected --chroot or no third argument." >&2; exit 2 ;;
 esac
 [[ -f "$source_chart/templates/ingress.yaml" ]]
-node_image=kindest/node:v1.35.5@sha256:ce977ae6d65918d0b58a5f8b5e940429c2ce42fa3a5619ec2bbc60b949c0ac95
+node_image=kindest/node:${K8S_VERSION:-$(tail -n 1 "$(dirname "$0")/../../test/e2e/kind-node-images")}
 host=ingress-smoke.test
 cluster="qig-$(uuidgen | tr '[:upper:]' '[:lower:]')"
 work=$(mktemp -d)

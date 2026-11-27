@@ -28,10 +28,15 @@ FROM ${BASE_IMAGE} AS chroot
 # TODO: Simplify in a future to a single Dockerfile
 COPY chroot.sh /chroot.sh
 RUN --mount=type=bind,from=qualytics-libxml2,target=/packages/libxml2 \
+  --mount=type=bind,from=qualytics-native-packages,target=/packages/native \
   apk update \
   && apk upgrade \
   && /chroot.sh \
-  && sh /packages/libxml2/install.sh /chroot
+  && sh /packages/libxml2/install.sh /chroot \
+  && cp /packages/native/*.rsa.pub /etc/apk/keys/ \
+  && apk --root /chroot --no-cache --no-scripts --keys-dir /etc/apk/keys \
+      --repositories-file /etc/apk/repositories add \
+      /packages/native/grpc-[0-9]*.apk /packages/native/protobuf-[0-9]*.apk
 
 FROM ${ALPINE_IMAGE}
 

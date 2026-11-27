@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+source "$(dirname "$0")/controller-images.sh"
 
 chart=charts/ingress-nginx
 version=$(yq -r '.controller.image.tag' "$chart/values.yaml")
@@ -22,7 +23,7 @@ if [[ $(jq -r '.isDraft' <<< "$draft") == false ]]; then
 fi
 
 expected=()
-for variant in controller controller-chroot; do
+for variant in "${controller_images[@]}"; do
   expected+=("$variant.index.json" "$variant.sigstore.json")
   for arch in amd64 arm64; do
     expected+=("$variant-$arch.attestation.json" "$variant-$arch.spdx.intoto.json")
@@ -31,12 +32,15 @@ done
 diff -u <(printf '%s\n' "${expected[@]}" | sort) <(jq -r '.assets[].name' <<< "$draft" | sort) >&2
 
 gh release download "$tag" --repo "$repository" --dir "$work" --pattern '*.json'
-for variant in controller controller-chroot; do
+for variant in "${controller_images[@]}"; do
   index="$variant.index.json"
   cmp "$chart/provenance/$version/$index" "$work/$index" >&2
-  field=digest
-  if [[ "$variant" == controller-chroot ]]; then field=digestChroot; fi
-  pin=$(yq -r ".controller.image.$field" "$chart/values.yaml")
+  case "$variant" in
+    controller) field=.controller.image.digest ;;
+    controller-chroot) field=.controller.image.digestChroot ;;
+    controller-webhook-certgen) field=.controller.admissionWebhooks.patch.image.digest ;;
+  esac
+  pin=$(yq -r "$field" "$chart/values.yaml")
   [[ "sha256:$(sha256sum "$work/$index" | cut -d ' ' -f 1)" == "$pin" ]] || {
     echo "$index differs from the chart's $field pin." >&2
     exit 1

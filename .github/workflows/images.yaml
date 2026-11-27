@@ -6,16 +6,19 @@ on:
       - "*"
     paths:
       - 'images/**'
+      - '.github/actions/setup-kind/**'
+      - 'test/e2e/kind-node-images'
 
   push:
     branches:
       - main
     paths:
       - 'images/**'
+      - '.github/actions/setup-kind/**'
+      - 'test/e2e/kind-node-images'
 
 permissions:
-  contents: write
-  packages: write
+  contents: read
 
 env:
   PLATFORMS: linux/amd64
@@ -27,6 +30,7 @@ jobs:
       pull-requests: read  # for dorny/paths-filter to read pull requests
     runs-on: ubuntu-latest
     outputs:
+      k8s: ${{ steps.k8s.outputs.matrix }}
       custom-error-pages: ${{ steps.filter.outputs.custom-error-pages }}
       cfssl: ${{ steps.filter.outputs.cfssl }}
       fastcgi-helloserver: ${{ steps.filter.outputs.fastcgi-helloserver }}
@@ -35,11 +39,15 @@ jobs:
       httpbun: ${{ steps.filter.outputs.httpbun }}
       kube-webhook-certgen: ${{ steps.filter.outputs.kube-webhook-certgen }}
       ext-auth-example-authsvc: ${{ steps.filter.outputs.ext-auth-example-authsvc }}
-      nginx: ${{ steps.filter.outputs.nginx }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Read Kubernetes test matrix
+        id: k8s
+        run: |
+          nodes=$(jq -Rnc '[inputs | {version: split("@")[0], image: .}]' test/e2e/kind-node-images)
+          echo "matrix=$nodes" >> "$GITHUB_OUTPUT"
       - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
         id: filter
         with:
@@ -59,10 +67,10 @@ jobs:
               - 'images/httpbun/**'
             kube-webhook-certgen:
               - 'images/kube-webhook-certgen/**'
+              - '.github/actions/setup-kind/**'
+              - 'test/e2e/kind-node-images'
             ext-auth-example-authsvc:
               - 'images/ext-auth-example-authsvc/**'
-            nginx:
-              - 'images/nginx/**'
 
   #### TODO: Make the below jobs 'less dumb' and use the job name as parameter (the github.job context does not work here)
   cfssl:
@@ -72,7 +80,6 @@ jobs:
     uses: ./.github/workflows/zz-tmpl-images.yaml
     with:
       name: cfssl
-    secrets: inherit
 
   custom-error-pages:
     needs: changes
@@ -81,7 +88,6 @@ jobs:
     uses: ./.github/workflows/zz-tmpl-images.yaml
     with:
       name: custom-error-pages
-    secrets: inherit
 
   e2e-test-echo:
     needs: changes
@@ -90,7 +96,6 @@ jobs:
     uses: ./.github/workflows/zz-tmpl-images.yaml
     with:
       name: e2e-test-echo
-    secrets: inherit
 
   ext-auth-example-authsvc:
     needs: changes
@@ -99,7 +104,6 @@ jobs:
     uses: ./.github/workflows/zz-tmpl-images.yaml
     with:
       name: ext-auth-example-authsvc
-    secrets: inherit
 
   fastcgi-helloserver:
     needs: changes
@@ -108,7 +112,6 @@ jobs:
     uses: ./.github/workflows/zz-tmpl-images.yaml
     with:
       name: fastcgi-helloserver
-    secrets: inherit
 
   go-grpc-greeter-server:
     needs: changes
@@ -117,7 +120,6 @@ jobs:
     uses: ./.github/workflows/zz-tmpl-images.yaml
     with:
       name: go-grpc-greeter-server
-    secrets: inherit
 
   httpbun:
     needs: changes
@@ -126,9 +128,9 @@ jobs:
     uses: ./.github/workflows/zz-tmpl-images.yaml
     with:
       name: httpbun
-    secrets: inherit
 
   kube-webhook-certgen:
+    name: kube-webhook-certgen (${{ matrix.k8s.version }})
     runs-on: ubuntu-latest
     needs: changes
     if: |
@@ -136,7 +138,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        k8s: [v1.31.14, v1.32.11, v1.33.7, v1.34.3, v1.35.1]
+        k8s: ${{ fromJSON(needs.changes.outputs.k8s) }}
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -150,44 +152,14 @@ jobs:
       with:
         go-version: ${{ env.GOLANG_VERSION }}
         check-latest: true
+    - uses: ./.github/actions/setup-kind
     - name: image build
       run: |
         cd images/ && make NAME=kube-webhook-certgen build
     - name: Create Kubernetes cluster
-      id: kind
-      run: |
-        kind create cluster --image=kindest/node:${{ matrix.k8s }}
+      env:
+        NODE_IMAGE: kindest/node:${{ matrix.k8s.image }}
+      run: kind create cluster --image="$NODE_IMAGE"
     - name: image test
       run: |
         cd images/ && make NAME=kube-webhook-certgen test test-e2e
-
-  nginx:
-    permissions:
-      contents: write
-      packages: write
-    runs-on: ubuntu-latest
-    needs: changes
-    if: |
-      (github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'kubernetes/ingress-nginx' && needs.changes.outputs.nginx == 'true')
-    env:
-      PLATFORMS: linux/amd64,linux/arm,linux/arm64
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
-      - name: Set up Docker Buildx
-        id: buildx
-        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
-        with:
-          version: latest
-          platforms: ${{ env.PLATFORMS }}
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: build-image
-        run: |
-          export TAG=$(cat images/nginx/TAG)
-          cd images/nginx/rootfs && docker buildx build --platform=${{ env.PLATFORMS }} --push -t ingressnginx/nginx:${TAG} .

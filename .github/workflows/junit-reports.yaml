@@ -6,11 +6,14 @@ on:
     types:
       - completed
 
-permissions:
-  checks: write
+permissions: {}
 
 jobs:
   report:
+    permissions:
+      actions: read
+      checks: write
+      contents: read
     runs-on: ubuntu-latest
     steps:
       - uses: dorny/test-reporter@3d76b34a4535afbd0600d347b09a6ee5deb3ed7f # v2.6.0
