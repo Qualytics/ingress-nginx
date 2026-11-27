@@ -111,6 +111,10 @@ jobs:
             libraries=$(chroot "$root" "/lib/$loader" --list /usr/local/modsecurity/lib/libmodsecurity.so)
             echo "$libraries" | grep -F "libxml2.so.2 => /usr/lib/libxml2.so.2"
           ' sh "$root"
+      - name: Verify NGINX exports an OTLP trace over gRPC
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: bash hack/qualytics/check-otlp.sh "qualytics-$VARIANT:qualification" "$VARIANT"
       - name: Run Qualytics chart qualification
         env:
           VARIANT: ${{ matrix.variant }}
