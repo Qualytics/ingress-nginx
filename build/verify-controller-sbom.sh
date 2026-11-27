@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+source "$(dirname "$0")/controller-images.sh"
 
 metadata=${1:?pass the release metadata directory}
 variant=${2:?pass the controller variant}
@@ -13,7 +14,8 @@ source=https://github.com/Qualytics/ingress-nginx
 cosign verify-blob --bundle "$metadata/$variant.sigstore.json" \
   --certificate-identity "$source/.github/workflows/qualytics-controller.yml@refs/heads/main" \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com "$index" >&2
-jq -e --arg image "docker.io/qualyticsai/ingress-nginx-$variant" --arg version "$version" '
+ref=$(controller_image_ref "$variant" "$version")
+jq -e --arg image "${ref%:*}" --arg version "${ref##*:}" '
   .annotations["org.opencontainers.image.ref.name"] == $image and
   .annotations["org.opencontainers.image.version"] == $version
 ' "$index" >/dev/null

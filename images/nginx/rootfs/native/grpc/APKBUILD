@@ -1,0 +1,41 @@
+pkgname=grpc
+pkgver=1.78.2
+pkgrel=0
+pkgdesc="gRPC C and C++ runtime for the OpenTelemetry exporter"
+url="https://grpc.io/"
+arch="x86_64 aarch64"
+license="Apache-2.0 AND BSD-3-Clause AND MIT"
+subpackages="$pkgname-dev $pkgname-tools:tools"
+source="$pkgname-$pkgver.tar.gz::https://codeload.github.com/grpc/grpc/tar.gz/refs/tags/v$pkgver"
+options="!check" # Runtime qualification exercises the generated OTLP client.
+
+build() {
+	cmake -S . -B build -G Ninja \
+		-DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_CXX_STANDARD=17 \
+		-DBUILD_SHARED_LIBS=ON -DgRPC_INSTALL=ON -DgRPC_BUILD_TESTS=OFF -DgRPC_DOWNLOAD_ARCHIVES=OFF \
+		-DgRPC_ABSL_PROVIDER=package -DgRPC_CARES_PROVIDER=package \
+		-DgRPC_PROTOBUF_PROVIDER=package -DgRPC_RE2_PROVIDER=package \
+		-DgRPC_SSL_PROVIDER=package -DgRPC_ZLIB_PROVIDER=package \
+		-DgRPC_BUILD_GRPC_CSHARP_PLUGIN=OFF -DgRPC_BUILD_GRPC_NODE_PLUGIN=OFF \
+		-DgRPC_BUILD_GRPC_OBJECTIVE_C_PLUGIN=OFF -DgRPC_BUILD_GRPC_PHP_PLUGIN=OFF \
+		-DgRPC_BUILD_GRPC_PYTHON_PLUGIN=OFF -DgRPC_BUILD_GRPC_RUBY_PLUGIN=OFF
+	cmake --build build --parallel "${JOBS}"
+}
+
+package() {
+	DESTDIR="$pkgdir" cmake --install build
+	install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+	install -Dm644 NOTICE.txt "$pkgdir/usr/share/licenses/$pkgname/NOTICE.txt"
+	for library in address_sorting utf8_range xxhash; do
+		install -Dm644 "third_party/$library/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/$library-LICENSE"
+	done
+}
+
+tools() {
+	pkgdesc="gRPC C++ protocol compiler plugin"
+	amove usr/bin
+}
+
+sha512sums="
+83612cfeb8dbca4a432ccb4732f077ee6814ca824a2343626262626d5b2abac3024634d607d7c0cf317eab867241ce7915d6dc9976112d0ec6c98f79f1afb2d6  grpc-1.78.2.tar.gz
+"

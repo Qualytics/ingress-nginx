@@ -1,0 +1,33 @@
+pkgname=protobuf
+pkgver=33.6
+pkgrel=0
+pkgdesc="Protocol Buffers C++ runtime"
+url="https://protobuf.dev/"
+arch="x86_64 aarch64"
+license="BSD-3-Clause AND MIT"
+subpackages="$pkgname-dev $pkgname-tools:tools"
+source="$pkgname-$pkgver.tar.gz::https://codeload.github.com/protocolbuffers/protobuf/tar.gz/refs/tags/v$pkgver"
+options="!check" # Runtime qualification exercises the generated OTLP client.
+
+build() {
+	cmake -S . -B build -G Ninja \
+		-DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
+		-Dprotobuf_BUILD_TESTS=OFF -Dprotobuf_BUILD_SHARED_LIBS=ON \
+		-Dprotobuf_FORCE_FETCH_DEPENDENCIES=OFF -Dprotobuf_LOCAL_DEPENDENCIES_ONLY=ON
+	cmake --build build --parallel "${JOBS}"
+}
+
+package() {
+	DESTDIR="$pkgdir" cmake --install build
+	install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+	install -Dm644 third_party/utf8_range/LICENSE "$pkgdir/usr/share/licenses/$pkgname/utf8_range-LICENSE"
+}
+
+tools() {
+	pkgdesc="Protocol Buffers compiler"
+	amove usr/bin
+}
+
+sha512sums="
+16f8689ec7aba47d29f27c2360c33c78d6e11ae9f29e815f792e6b943713395e680f0ab6d48f9395e8bec1df44c4afdc212ad4e4fc3629b820e7b3ac82e132e9  protobuf-33.6.tar.gz
+"

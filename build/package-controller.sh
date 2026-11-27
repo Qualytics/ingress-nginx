@@ -1,13 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
+source "$(dirname "$0")/controller-images.sh"
 
-archives=${1:?pass the directory containing the four qualified OCI archives}
+archives=${1:?pass the directory containing the qualified OCI archives}
 output=${2:?pass an empty output directory}
 version=$(cat TAG)
 revision=$(git rev-parse HEAD)
 [[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-qualytics\.[0-9]+$ ]] || { echo "Invalid Qualytics TAG: $version" >&2; exit 1; }
 mkdir -p "$output"
-for variant in controller controller-chroot; do
+apk_version() {
+  awk -F= '/^pkgver=/ {version=$2} /^pkgrel=/ {release=$2} END {printf "%s-r%s", version, release}' \
+    "images/nginx/rootfs/native/$1/APKBUILD"
+}
+grpc_version=$(apk_version grpc)
+protobuf_version=$(apk_version protobuf)
+for variant in "${controller_images[@]}"; do
+  ref=$(controller_image_ref "$variant" "$version")
   layout="$output/$variant"
   mkdir "$layout"
   for arch in amd64 arm64; do
@@ -26,12 +34,20 @@ for variant in controller controller-chroot; do
     ' "$attest_manifest" >/dev/null
     sbom=$(jq -er '.layers[] | select(.annotations["in-toto.io/predicate-type"] == "https://spdx.dev/Document") | .digest' "$attest_manifest")
     sbom_blob="$layout/blobs/sha256/${sbom#sha256:}"
-    jq -e '[.predicate.packages[] | select(.name == "libxml2") | .versionInfo] | unique == ["2.13.9-r4"]' "$sbom_blob" >/dev/null
+    if [[ "$variant" == controller-webhook-certgen ]]; then
+      jq -e 'any(.predicate.packages[].externalRefs[]?; .referenceLocator | startswith("pkg:golang/k8s.io/client-go@"))' "$sbom_blob" >/dev/null
+    else
+      jq -e --arg grpc "$grpc_version" --arg protobuf "$protobuf_version" '
+        def apk_versions($name): [.predicate.packages[] | select(.name == $name and
+          any(.externalRefs[]?; .referenceLocator | startswith("pkg:apk/"))) | .versionInfo] | unique;
+        apk_versions("libxml2") == ["2.13.9-r4"] and apk_versions("grpc") == [$grpc] and apk_versions("protobuf") == [$protobuf]
+      ' "$sbom_blob" >/dev/null
+    fi
     cp "$attest_manifest" "$output/$variant-$arch.attestation.json"
     cp "$sbom_blob" "$output/$variant-$arch.spdx.intoto.json"
   done
   index="$output/$variant.index.json"
-  jq -cs --arg revision "$revision" --arg version "$version" --arg image "docker.io/qualyticsai/ingress-nginx-$variant" '
+  jq -cs --arg revision "$revision" --arg version "${ref##*:}" --arg image "${ref%:*}" '
     {schemaVersion: 2, mediaType: "application/vnd.oci.image.index.v1+json",
      manifests: [.[].manifests[]],
      annotations: {"org.opencontainers.image.revision": $revision, "org.opencontainers.image.version": $version,

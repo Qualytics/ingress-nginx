@@ -19,9 +19,12 @@ image:
 		--build-arg E2E_BASE_IMAGE=$(E2E_BASE_IMAGE) \
 		--tag nginx-ingress-controller:e2e .
 
+chart-runner:
+	docker build --target chart-runner --build-arg E2E_BASE_IMAGE=$(E2E_BASE_IMAGE) --tag ingress-controller/chart-runner:e2e .
+
 clean:
 	rm -rf _cache e2e.test kubectl cluster ginkgo
 	docker rmi -f nginx-ingress-controller:e2e || true
 
 
-.PHONY: image clean
+.PHONY: chart-runner image clean

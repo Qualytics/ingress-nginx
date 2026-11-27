@@ -7,6 +7,9 @@ on:
       k8s-version:
         required: true
         type: string
+      node-image:
+        required: true
+        type: string
       variation:
         type: string
 
@@ -22,15 +25,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
+      - uses: ./.github/actions/setup-kind
+
       - name: cache
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: docker.tar.gz
 
       - name: Create Kubernetes ${{ inputs.k8s-version }} cluster
-        id: kind
-        run: |
-          kind create cluster --image=kindest/node:${{ inputs.k8s-version }} --config test/e2e/kind.yaml
+        env:
+          NODE_IMAGE: ${{ inputs.node-image }}
+        run: kind create cluster --image="$NODE_IMAGE" --config test/e2e/kind.yaml
 
       - name: Load images from cache
         run: |
