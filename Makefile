@@ -86,6 +86,11 @@ image-chroot: ## Build the chroot variant from the same source checkout.
 	VERSION="$(TAG)" IMAGE="$(IMAGE)" COMMIT_SHA="$(COMMIT_SHA)" \
 		docker buildx bake --set '*.platform=linux/$(ARCH)' --load controller-chroot
 
+.PHONY: image-webhook-certgen
+image-webhook-certgen: ## Build the admission webhook certificate helper.
+	VERSION="$(TAG)" IMAGE="$(IMAGE)" COMMIT_SHA="$(COMMIT_SHA)" \
+		docker buildx bake --set '*.platform=linux/$(ARCH)' --load controller-webhook-certgen
+
 .PHONY: clean-image
 clean-image: ## Removes local image
 	echo "removing old image $(REGISTRY)/controller:$(TAG)"

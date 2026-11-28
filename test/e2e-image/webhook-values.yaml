@@ -1,0 +1,8 @@
+controller:
+  admissionWebhooks:
+    patch:
+      image:
+        repository: ingress-controller/controller
+        tag: kube-webhook-certgen-1.0.0-dev
+        digest: ""
+        pullPolicy: Never

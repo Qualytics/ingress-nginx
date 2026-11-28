@@ -61,7 +61,7 @@ if [[ ${KUBE_CLIENT_VERSION} -lt 24 ]]; then
 fi
 
 echo "[dev-env] building image"
-make build image
+make build image image-webhook-certgen
 docker tag "${REGISTRY}/controller:${TAG}" "${DEV_IMAGE}"
 
 K8S_VERSION=${K8S_VERSION:-$(tail -n 1 "$DIR/../test/e2e/kind-node-images")}
@@ -76,7 +76,7 @@ else
 fi
 
 echo "[dev-env] copying docker images to cluster..."
-kind load docker-image --name="${KIND_CLUSTER_NAME}" "${DEV_IMAGE}"
+kind load docker-image --name="${KIND_CLUSTER_NAME}" "${DEV_IMAGE}" "${REGISTRY}/controller:kube-webhook-certgen-${TAG}"
 
 echo "[dev-env] deploying NGINX Ingress controller..."
 kubectl create namespace ingress-nginx &> /dev/null || true
@@ -87,6 +87,13 @@ controller:
     repository: ${REGISTRY}/controller
     tag: ${TAG}
     digest:
+  admissionWebhooks:
+    patch:
+      image:
+        repository: ${REGISTRY}/controller
+        tag: kube-webhook-certgen-${TAG}
+        digest: ""
+        pullPolicy: Never
   config:
     worker-processes: "1"
   podLabels:

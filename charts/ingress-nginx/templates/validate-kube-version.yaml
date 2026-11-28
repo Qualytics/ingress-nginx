@@ -1,0 +1,4 @@
+{{/* Helm checks Chart.yaml kubeVersion only on the root chart. Apply it to enabled dependencies too. */}}
+{{- if not (semverCompare .Chart.KubeVersion .Capabilities.KubeVersion.Version) -}}
+{{- fail (printf "Qualytics ingress-nginx requires Kubernetes %s, found %s" .Chart.KubeVersion .Capabilities.KubeVersion.Version) -}}
+{{- end -}}

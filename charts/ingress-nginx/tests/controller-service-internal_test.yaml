@@ -51,7 +51,7 @@ tests:
   - it: should create a Service with `trafficDistribution` if `controller.service.internal.trafficDistribution` is set
     capabilities:
       majorVersion: 1
-      minorVersion: 31
+      minorVersion: 35
     set:
       controller.service.internal.enabled: true
       controller.service.internal.annotations:

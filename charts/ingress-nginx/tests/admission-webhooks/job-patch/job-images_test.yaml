@@ -4,11 +4,11 @@ templates:
   - admission-webhooks/job-patch/job-patchWebhook.yaml
 
 tests:
-  - it: pulls both webhook jobs from the upstream registry by default
+  - it: pins both webhook jobs to the Qualytics helper in the controller repository
     asserts:
       - matchRegex:
           path: spec.template.spec.containers[0].image
-          pattern: '^registry\.k8s\.io/ingress-nginx/kube-webhook-certgen:[^@]+@sha256:[0-9a-f]{64}$'
+          pattern: '^docker\.io/qualyticsai/ingress-nginx-controller:kube-webhook-certgen-v[0-9.]+-qualytics\.[0-9]+@sha256:[0-9a-f]{64}$'
 
   - it: applies a global registry mirror to both webhook jobs
     set:
@@ -16,7 +16,7 @@ tests:
     asserts:
       - matchRegex:
           path: spec.template.spec.containers[0].image
-          pattern: '^mirror\.example/ingress-nginx/kube-webhook-certgen:[^@]+@sha256:[0-9a-f]{64}$'
+          pattern: '^mirror\.example/qualyticsai/ingress-nginx-controller:kube-webhook-certgen-v[0-9.]+-qualytics\.[0-9]+@sha256:[0-9a-f]{64}$'
 
   - it: gives a fully qualified webhook repository precedence over the global mirror
     set:

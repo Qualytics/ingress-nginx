@@ -54,7 +54,7 @@ if [[ ! -z "$NAMESPACE_OVERLAY" && -d "$DIR/namespace-overlays/$NAMESPACE_OVERLA
     echo "Namespace overlay $NAMESPACE_OVERLAY is being used for namespace $NAMESPACE"
     helm install nginx-ingress ${DIR}/charts/ingress-nginx \
         --namespace=$NAMESPACE \
-        --values "$DIR/namespace-overlays/$NAMESPACE_OVERLAY/values.yaml" \
+        --values "$DIR/namespace-overlays/$NAMESPACE_OVERLAY/values.yaml" --values "$DIR/webhook-values.yaml" \
         --set-string controller.image.repository="$repository" --set controller.image.chroot="$IS_CHROOT"
 else
     cat << EOF | helm install nginx-ingress ${DIR}/charts/ingress-nginx --namespace=$NAMESPACE --values -

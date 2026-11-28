@@ -44,7 +44,7 @@ spec:
       containers:
         - name: patch
           {{- with (merge .Values.controller.admissionWebhooks.patch.image .Values.global.image) }}
-          image: {{ if .repository }}{{ .repository }}{{ else }}{{ default "registry.k8s.io" .registry }}/{{ .image }}{{ end }}:{{ .tag }}{{ if .digest }}@{{ .digest }}{{ end }}
+          image: {{ include "ingress-nginx.controllerImage" . }}
           {{- end }}
           imagePullPolicy: {{ .Values.controller.admissionWebhooks.patch.image.pullPolicy }}
           args:
