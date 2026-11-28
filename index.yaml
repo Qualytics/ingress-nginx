@@ -3,6 +3,33 @@ entries:
   ingress-nginx:
   - annotations:
       artifacthub.io/changes: |
+        - Require Kubernetes 1.35 or later.
+        - Update controller runtime dependencies and the admission webhook certificate helper.
+        - Pin the signed Qualytics webhook helper alongside both controller variants.
+      artifacthub.io/prerelease: "false"
+    apiVersion: v2
+    appVersion: 1.30.8-qualytics.3
+    created: "2026-11-28T00:15:58.626208548Z"
+    description: Qualytics distribution of the Kubernetes ingress-nginx controller
+    digest: a7a29ba173ee45150d9899e7ef78f0c73a4c6f70d00074f80ee5fd510af23e61
+    home: https://github.com/Qualytics/ingress-nginx
+    icon: https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Nginx_logo.svg/500px-Nginx_logo.svg.png
+    keywords:
+    - ingress
+    - nginx
+    kubeVersion: '>=1.35.0-0'
+    maintainers:
+    - name: Qualytics
+      url: https://github.com/Qualytics
+    name: ingress-nginx
+    sources:
+    - https://github.com/Qualytics/ingress-nginx
+    - https://github.com/kubernetes/ingress-nginx
+    urls:
+    - https://github.com/Qualytics/ingress-nginx/releases/download/ingress-nginx-4.15.3/ingress-nginx-4.15.3.tgz
+    version: 4.15.3
+  - annotations:
+      artifacthub.io/changes: |
         - Use the Qualytics ingress-nginx controller and chroot images.
         - Include Alpine's libxml2 security backport in both controller images.
       artifacthub.io/prerelease: "false"
@@ -27,4 +54,4 @@ entries:
     urls:
     - https://github.com/Qualytics/ingress-nginx/releases/download/ingress-nginx-4.15.2/ingress-nginx-4.15.2.tgz
     version: 4.15.2
-generated: "2026-11-26T03:50:26.065738512Z"
+generated: "2026-11-28T00:15:58.626219785Z"
